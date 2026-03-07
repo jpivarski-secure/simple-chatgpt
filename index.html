@@ -161,19 +161,23 @@
               }
           }
 
+          let body = {
+              model: model.value,
+              temperature: temperature,
+              messages: listOfMessages,
+              stream: true,
+          };
+          if (model.value.startsWith("gpt-5")) {
+              body["reasoning_effort"] = "none";
+          }
+
           fetch("https://api.openai.com/v1/chat/completions", {
               method: "POST",
               headers: {
                   "Content-Type": "application/json",
                   "Authorization": "Bearer " + key.value,
               },
-              body: JSON.stringify({
-                  model: model.value,
-                  temperature: temperature,
-                  messages: listOfMessages,
-                  stream: true,
-                  reasoning_effort: "none",
-              }),
+              body: JSON.stringify(body),
 
           }).then(async response => {
               if (!response.ok) {
