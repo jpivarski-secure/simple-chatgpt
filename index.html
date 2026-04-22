@@ -688,8 +688,6 @@
           const body = {
               model: model.value,
               prompt: buildImagePrompt(message),
-              stream: true,
-              partial_images: 2,
           };
           if (imageSize.value.trim() != "") {
               body["size"] = imageSize.value.trim();
