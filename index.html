@@ -404,12 +404,6 @@
       }
 
       function getAttachmentPath(file, fileInput) {
-          if (file.webkitRelativePath) {
-              return file.webkitRelativePath;
-          }
-          if (fileInput.files.length == 1  &&  fileInput.value) {
-              return fileInput.value;
-          }
           return file.name;
       }
 
