@@ -109,6 +109,23 @@
           line-height: 1.2;
       }
 
+      .attachment-controls {
+          margin-top: 2px;
+          color: #ffff00;
+      }
+
+      .attachment-line {
+          white-space: pre-wrap;
+      }
+
+      .attachment-toggle {
+          display: inline-block;
+          width: 1em;
+          text-align: center;
+          cursor: pointer;
+          user-select: none;
+      }
+
       .message svg {
           margin-left: 3px;
           margin-bottom: 3px;
@@ -188,6 +205,7 @@
               activeRequest.controller.abort();
               activeRequest = null;
           }
+          attachedFiles.clear();
           while (messages.firstChild) {
               messages.removeChild(messages.firstChild);
           }
@@ -200,6 +218,7 @@
               user: message.querySelector(".user-message").innerText,
               assistant: message.querySelector(".ai-message").dataset.rawText  ||  "",
               sources: Array.from(message.querySelectorAll(".sources a")).map(x => x.href),
+              attachments: Array.from(message.querySelectorAll(".attachment-line")).map(x => x.dataset.path),
           })));
       }
 
@@ -213,14 +232,25 @@
           messages.insertAdjacentHTML("beforeend", newMessageAsHTML);
           const message = messages.lastElementChild;
           const svg = message.querySelector("svg");
+          const fileInput = message.querySelector(".attachment-input");
+          const addButton = message.querySelector(".attachment-add");
           svg.dataset.mode = "send";
           svg.addEventListener("click", () => {
               if (svg.dataset.mode == "stop") {
                   stop(message);
               }
               else {
-                  send(message);
+                  send(message).catch(error => {
+                      setAiMessageText(message.querySelector(".ai-message"), `[${error.toString()}]`);
+                  });
               }
+          });
+          addButton.addEventListener("click", () => fileInput.click());
+          fileInput.addEventListener("change", () => {
+              for (const file of fileInput.files) {
+                  addAttachment(message, file, getAttachmentPath(file, fileInput));
+              }
+              fileInput.value = "";
           });
       }
 
@@ -358,7 +388,59 @@
           return urls;
       }
 
-      function send(message) {
+      function getAttachmentRecords(message) {
+          return Array.from(message.querySelectorAll(".attachment-line")).map(line => ({
+              path: line.dataset.path,
+              file: attachedFiles.get(line.dataset.attachmentId)  ||  null,
+          }));
+      }
+
+      function addAttachment(message, file, path) {
+          attachmentCounter += 1;
+          const id = "attachment-" + attachmentCounter;
+          attachedFiles.set(id, file);
+          addAttachmentLine(message, path, id);
+      }
+
+      function getAttachmentPath(file, fileInput) {
+          if (file.webkitRelativePath) {
+              return file.webkitRelativePath;
+          }
+          if (fileInput.files.length == 1  &&  fileInput.value) {
+              return fileInput.value;
+          }
+          return file.name;
+      }
+
+      function addAttachmentLine(message, path, attachmentId) {
+          const list = message.querySelector(".attachment-list");
+          const line = document.createElement("div");
+          line.className = "attachment-line";
+          line.dataset.path = path;
+          line.dataset.attachmentId = attachmentId;
+
+          const toggle = document.createElement("span");
+          toggle.className = "attachment-toggle";
+          toggle.textContent = "−";
+          toggle.addEventListener("click", () => {
+              attachedFiles.delete(attachmentId);
+              line.remove();
+          });
+          line.appendChild(toggle);
+          line.appendChild(document.createTextNode(path));
+          list.appendChild(line);
+      }
+
+      async function fileToDataUrl(file) {
+          return await new Promise((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () => resolve(reader.result);
+              reader.onerror = () => reject(reader.error  ||  new Error("Could not read file."));
+              reader.readAsDataURL(file);
+          });
+      }
+
+      async function send(message) {
           if (activeRequest != null) {
               return;
           }
@@ -384,8 +466,28 @@
           for (let child of messages.children) {
               const userText = child.querySelector(".user-message").textContent;
               const assistantText = child.querySelector(".ai-message").dataset.rawText  ||  "";
-              if (userText.trim() != "") {
-                  listOfMessages.push({role: "user", content: userText});
+              const attachments = getAttachmentRecords(child);
+              if (userText.trim() != ""  ||  attachments.length != 0) {
+                  if (attachments.length == 0) {
+                      listOfMessages.push({role: "user", content: userText});
+                  }
+                  else {
+                      const content = [];
+                      for (const attachment of attachments) {
+                          if (attachment.file == null) {
+                              throw new Error(`Attachment unavailable: ${attachment.path}. Reattach the file.`);
+                          }
+                          content.push({
+                              type: "input_file",
+                              filename: attachment.file.name,
+                              file_data: await fileToDataUrl(attachment.file),
+                          });
+                      }
+                      if (userText != "") {
+                          content.push({type: "input_text", text: userText});
+                      }
+                      listOfMessages.push({role: "user", content: content});
+                  }
               }
               if (assistantText.trim() != "") {
                   listOfMessages.push({role: "assistant", content: assistantText});
@@ -516,6 +618,8 @@
       let webSearch = document.getElementById("web-search");
       let activeRequest = null;
       let renderedReasoningItems = new Set();
+      let attachedFiles = new Map();
+      let attachmentCounter = 0;
       const sendButtonShape = `
     <g class="send-shape" transform="translate(-38.425328,-84.136154)">
       <path style="fill:#ffff00;stroke:#ffff00;stroke-width:10;stroke-linejoin:round;" d="M 52.567223,151.75928 43.425096,190.61331 144.44559,139.87452 43.425096,89.135727 l 9.142127,38.854033 91.878367,11.88476 z"/>
@@ -528,6 +632,11 @@
       const newMessageAsHTML = `
 <div class="message">
   <div class="user-message" contenteditable="plaintext-only"></div>
+  <div class="attachment-controls">
+    <div class="attachment-list"></div>
+    <div><span class="attachment-toggle attachment-add">+</span></div>
+    <input class="attachment-input" type="file" multiple style="display:none;">
+  </div>
   <svg viewBox="0 0 111.01965 111.47673" width="2em">
 ${sendButtonShape}
 ${stopButtonShape}
@@ -568,6 +677,12 @@ ${stopButtonShape}
                   }
                   else {
                       setAiMessageText(last.querySelector(".ai-message"), message.assistant);
+                  }
+                  if (Array.isArray(message.attachments)) {
+                      for (const path of message.attachments) {
+                          attachmentCounter += 1;
+                          addAttachmentLine(last, path, "attachment-" + attachmentCounter);
+                      }
                   }
                   if (Array.isArray(message.sources)) {
                       renderSources(last.querySelector(".sources"), message.sources);
