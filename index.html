@@ -190,8 +190,8 @@
               let buffer = "";
 
               while (!done) {
-                  const { value, d } = await reader.read();
-                  done = d;
+                  const { value, done: readerDone } = await reader.read();
+                  done = readerDone;
                   if (done) {
                       break;
                   }
