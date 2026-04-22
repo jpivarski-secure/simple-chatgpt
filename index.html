@@ -532,10 +532,6 @@
           }
       }
 
-      function isImageGenerationModel(modelName) {
-          return modelName.startsWith("gpt-image-");
-      }
-
       async function generatedImagesAsInputContent(message) {
           const content = [];
           for (const imageId of Array.from(message.querySelectorAll(".generated-images img[data-image-id]")).map(x => x.dataset.imageId)) {
@@ -554,6 +550,7 @@
           const controller = new AbortController();
           const svg = message.querySelector("svg");
           renderedReasoningItems = new Set();
+          renderedImageCallIds = new Set();
           setButtonToStop(svg);
           activeRequest = {message: message, controller: controller};
           return controller;
@@ -621,106 +618,22 @@
           );
       }
 
-      function buildImagePrompt(message) {
-          const parts = [];
-          const systemText = systemMessage.textContent.trim();
-          if (systemText != "") {
-              parts.push("System instructions:\n" + systemText);
+      function imageToolConfig() {
+          if (!imageModel.value.trim().startsWith("gpt-image-")) {
+              return null;
           }
-          const conversation = [];
-          for (const child of messages.children) {
-              const userText = child.querySelector(".user-message").textContent.trim();
-              const assistantText = child.querySelector(".ai-message").dataset.rawText  ||  "";
-              if (child == message) {
-                  if (userText != "") {
-                      conversation.push("User: " + userText);
-                  }
-                  break;
-              }
-              if (userText != "") {
-                  conversation.push("User: " + userText);
-              }
-              if (assistantText.trim() != "") {
-                  conversation.push("Assistant: " + assistantText.trim());
-              }
-          }
-          if (conversation.length != 0) {
-              parts.push("Conversation context:\n" + conversation.join("\n\n"));
-          }
-          parts.push("Generate one image that best satisfies the latest user request.");
-          return parts.join("\n\n");
-      }
-
-      async function generateImage(message) {
-          if (!imageModel.value) {
-              return;
-          }
-          while (message.nextSibling) {
-              messages.removeChild(message.nextSibling);
-          }
-          const output = message.querySelector(".ai-message");
-          const sources = message.querySelector(".sources");
-          const images = message.querySelector(".generated-images");
-          setAiMessageText(output, "");
-          sources.textContent = "";
-          images.textContent = "";
-
-          localStorage.setItem("history", getHistory());
-
-          const body = {
-              model: imageModel.value,
-              prompt: buildImagePrompt(message),
+          const tool = {
+              type: "image_generation",
+              model: imageModel.value.trim(),
+              partial_images: 2,
           };
-          if (imageSize.value.trim() != "") {
-              body["size"] = imageSize.value.trim();
-          }
           if (imageQuality.value.trim() != "") {
-              body["quality"] = imageQuality.value.trim();
+              tool["quality"] = imageQuality.value.trim();
           }
-
-          const controller = beginRequest(message);
-
-          return fetch("https://api.openai.com/v1/images/generations", {
-              method: "POST",
-              headers: {
-                  "Content-Type": "application/json",
-                  "Authorization": "Bearer " + key.value,
-              },
-              signal: controller.signal,
-              body: JSON.stringify(body),
-
-          }).then(async response => {
-              if (!response.ok) {
-                  let message = `HTML response is ${response.status}.`;
-                  try {
-                      const errorBody = await response.json();
-                      message = errorBody.error?.message  ||  message;
-                  }
-                  catch (error) {
-                  }
-                  throw new Error(message);
-              }
-
-              const json = await response.json();
-              const b64 = json.data?.[0]?.b64_json;
-              if (!b64) {
-                  throw new Error("No image data returned.");
-              }
-              const dataUrl = `data:image/png;base64,${b64}`;
-              const imageId = await saveGeneratedImage(dataUrl);
-              renderGeneratedImage(images, dataUrl, imageId);
-
-              finishRequest(message, true);
-
-          }).catch(error => {
-              if (error.name == "AbortError") {
-                  finishRequest(message, true);
-              }
-              else {
-                  setAiMessageText(output, `[${error.toString()}]`);
-                  finishRequest(message, false);
-              }
-          });
+          if (imageSize.value.trim() != "") {
+              tool["size"] = imageSize.value.trim();
+          }
+          return tool;
       }
 
       async function send(message) {
@@ -729,9 +642,6 @@
           }
           if (!model.value  ||  !key.value) {
               return;
-          }
-          if (isImageGenerationModel(imageModel.value)) {
-              return await generateImage(message);
           }
           if (!temp.value) {
               return;
@@ -761,19 +671,10 @@
               const generatedImages = await generatedImagesAsInputContent(child);
               if (userText.trim() != ""  ||  attachments.length != 0) {
                   if (attachments.length == 0) {
-                      if (generatedImages.length == 0) {
-                          listOfMessages.push({role: "user", content: userText});
-                      }
-                      else {
-                          const content = generatedImages.slice();
-                          if (userText != "") {
-                              content.push({type: "input_text", text: userText});
-                          }
-                          listOfMessages.push({role: "user", content: content});
-                      }
+                      listOfMessages.push({role: "user", content: userText});
                   }
                   else {
-                      const content = generatedImages.slice();
+                      const content = [];
                       for (const attachment of attachments) {
                           if (attachment.file == null) {
                               throw new Error(`Attachment unavailable: ${attachment.path}. Reattach the file.`);
@@ -799,11 +700,14 @@
                       listOfMessages.push({role: "user", content: content});
                   }
               }
-              else if (generatedImages.length != 0) {
-                  listOfMessages.push({role: "user", content: generatedImages});
-              }
               if (assistantText.trim() != "") {
                   listOfMessages.push({role: "assistant", content: assistantText});
+              }
+              if (generatedImages.length != 0) {
+                  listOfMessages.push({
+                      role: "user",
+                      content: generatedImages,
+                  });
               }
           }
 
@@ -825,6 +729,13 @@
               body["tools"] = [{type: "web_search"}];
               body["tool_choice"] = "auto";
               body["include"] = ["web_search_call.action.sources"];
+          }
+          const imageTool = imageToolConfig();
+          if (imageTool != null) {
+              if (!("tools" in body)) {
+                  body["tools"] = [];
+              }
+              body["tools"].push(imageTool);
           }
 
           const controller = beginRequest(message);
@@ -883,13 +794,34 @@
                           if (json.type == "response.output_text.delta") {
                               appendAiMessageText(output, json.delta  ||  "");
                           }
+                          else if (json.type == "response.image_generation_call.partial_image") {
+                              setPartialGeneratedImage(images, `data:image/png;base64,${json.partial_image_b64}`);
+                          }
                           else if (json.type == "response.output_item.done") {
                               appendReasoningSummary(output, json.item);
+                              if (json.item?.type == "image_generation_call"  &&  json.item.result  &&  !renderedImageCallIds.has(json.item.id)) {
+                                  clearGeneratedImagePartials(images);
+                                  const dataUrl = `data:image/png;base64,${json.item.result}`;
+                                  const imageId = await saveGeneratedImage(dataUrl);
+                                  renderGeneratedImage(images, dataUrl, imageId);
+                                  if (json.item.id != null) {
+                                      renderedImageCallIds.add(json.item.id);
+                                  }
+                              }
                           }
                           else if (json.type == "response.completed") {
                               if (Array.isArray(json.response?.output)) {
                                   for (const item of json.response.output) {
                                       appendReasoningSummary(output, item);
+                                      if (item.type == "image_generation_call"  &&  item.result  &&  !renderedImageCallIds.has(item.id)) {
+                                          clearGeneratedImagePartials(images);
+                                          const dataUrl = `data:image/png;base64,${item.result}`;
+                                          const imageId = await saveGeneratedImage(dataUrl);
+                                          renderGeneratedImage(images, dataUrl, imageId);
+                                          if (item.id != null) {
+                                              renderedImageCallIds.add(item.id);
+                                          }
+                                      }
                                   }
                               }
                               renderSources(sources, collectWebSources(json.response  ||  {}));
@@ -932,6 +864,7 @@
       let imageQualityMenu = document.getElementById("image-quality-menu");
       let activeRequest = null;
       let renderedReasoningItems = new Set();
+      let renderedImageCallIds = new Set();
       let attachedFiles = new Map();
       let attachmentCounter = 0;
       let generatedImageCounter = 0;
