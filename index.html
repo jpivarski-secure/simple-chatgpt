@@ -37,14 +37,15 @@
           line-height: 1.2;
       }
 
-      #controls {
+      #reasoning-wrapper {
           position: relative;
+          display: inline-block;
       }
 
       #reasoning-menu {
           position: absolute;
           top: calc(100% + 2px);
-          left: 75px;
+          left: 0;
           display: none;
           border: 1px solid #808000;
           background: black;
@@ -113,17 +114,19 @@
 
     <div id="controls">
       <input id="model" size="8" type="input" placeholder="Model...">
-      <input id="reasoning-effort" size="6" type="input" placeholder="Reason...">
+      <span id="reasoning-wrapper">
+        <input id="reasoning-effort" size="6" type="input" placeholder="Reason...">
+        <div id="reasoning-menu">
+          <div class="reasoning-option">none</div>
+          <div class="reasoning-option">minimal</div>
+          <div class="reasoning-option">low</div>
+          <div class="reasoning-option">medium</div>
+          <div class="reasoning-option">high</div>
+          <div class="reasoning-option">xhigh</div>
+        </div>
+      </span>
       <input id="temp" size="4" type="input" placeholder="Temp...">
       <input id="key" size="4" type="password" placeholder="API key...">
-      <div id="reasoning-menu">
-        <div class="reasoning-option">none</div>
-        <div class="reasoning-option">minimal</div>
-        <div class="reasoning-option">low</div>
-        <div class="reasoning-option">medium</div>
-        <div class="reasoning-option">high</div>
-        <div class="reasoning-option">xhigh</div>
-      </div>
     </div>
 
     <div id="messages"></div>
