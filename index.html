@@ -396,20 +396,34 @@
       }
 
       function setupChoiceMenu(input, menu, storageKey) {
+          function selectOption(option) {
+              input.value = option.textContent;
+              localStorage.setItem(storageKey, input.value);
+              hideMenu(menu);
+              input.blur();
+          }
+
           input.addEventListener("focus", () => showMenu(menu));
           input.addEventListener("click", () => showMenu(menu));
           input.addEventListener("input", () => showMenu(menu));
           input.addEventListener("blur", () => {
               setTimeout(() => hideMenu(menu), 100);
           });
-          for (const option of menu.children) {
-              option.addEventListener("mousedown", event => {
-                  event.preventDefault();
-                  input.value = option.textContent;
-                  localStorage.setItem(storageKey, input.value);
-                  hideMenu(menu);
-                  input.blur();
-              });
+          menu.addEventListener("pointerdown", event => {
+              const option = event.target.closest(".choice-option");
+              if (option == null) {
+                  return;
+              }
+              event.preventDefault();
+              selectOption(option);
+          });
+          menu.addEventListener("mousedown", event => {
+              const option = event.target.closest(".choice-option");
+              if (option == null) {
+                  return;
+              }
+              event.preventDefault();
+              selectOption(option);
           });
       }
 
