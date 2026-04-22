@@ -87,9 +87,10 @@
       </div>
     </details>
 
-    <input id="model" size="10" type="input" placeholder="Model...">
-    <input id="temp" size="5" type="input" placeholder="Temp...">
-    <input id="key" size="5" type="password" placeholder="API key...">
+    <input id="model" size="8" type="input" placeholder="Model...">
+    <input id="reasoning-effort" size="6" type="input" placeholder="Reason...">
+    <input id="temp" size="4" type="input" placeholder="Temp...">
+    <input id="key" size="4" type="password" placeholder="API key...">
 
     <div id="messages"></div>
 
@@ -108,6 +109,7 @@
       }
       syncDivToLocalStorage("system-message");
       syncInputToLocalStorage("model");
+      syncInputToLocalStorage("reasoning-effort");
       syncInputToLocalStorage("temp");
       syncInputToLocalStorage("key");
 
@@ -168,8 +170,12 @@
               store: false,
               stream: true,
           };
-          if (model.value.startsWith("gpt-5")) {
-              body["reasoning"] = {effort: "none"};
+          const effort = reasoningEffort.value.trim();
+          if (effort != ""  &&  !model.value.startsWith("gpt-4.1")) {
+              body["reasoning"] = {
+                  effort: effort,
+                  summary: "concise",
+              };
           }
 
           fetch("https://api.openai.com/v1/responses", {
@@ -218,6 +224,22 @@
                           if (json.type == "response.output_text.delta") {
                               output.textContent += json.delta  ||  "";
                           }
+                          else if (
+                              json.type == "response.reasoning_summary_text.delta"  ||
+                              json.type == "response.reasoning_summary.delta"
+                          ) {
+                              output.textContent += json.delta  ||  "";
+                          }
+                          else if (
+                              json.type == "response.output_item.done"  &&
+                              json.item?.type == "reasoning"  &&
+                              Array.isArray(json.item.summary)
+                          ) {
+                              const summary = json.item.summary.map(x => x.text  ||  "").join("");
+                              if (summary != "") {
+                                  output.textContent += summary;
+                              }
+                          }
                           else if (json.type == "error") {
                               throw new Error(json.error?.message  ||  "Streaming error.");
                           }
@@ -240,6 +262,7 @@
       let messages = document.getElementById("messages");
       let systemMessage = document.getElementById("system-message");
       let model = document.getElementById("model");
+      let reasoningEffort = document.getElementById("reasoning-effort");
       let temp = document.getElementById("temp");
       let key = document.getElementById("key");
 
