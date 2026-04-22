@@ -251,13 +251,13 @@
       syncInputToLocalStorage("image-moderation");
       syncCheckboxToLocalStorage("web-search");
 
-      document.getElementById("clear-all").addEventListener("click", () => {
+      document.getElementById("clear-all").addEventListener("click", async () => {
           if (activeRequest != null) {
               activeRequest.controller.abort();
               activeRequest = null;
           }
           attachedFiles.clear();
-          clearGeneratedImages().catch(() => {});
+          await clearGeneratedImages().catch(() => {});
           while (messages.firstChild) {
               messages.removeChild(messages.firstChild);
           }
@@ -560,6 +560,20 @@
           return modelName.startsWith("gpt-image-");
       }
 
+      async function generatedImagesAsInputContent(message) {
+          const content = [];
+          for (const imageId of Array.from(message.querySelectorAll(".generated-images img[data-image-id]")).map(x => x.dataset.imageId)) {
+              const record = await loadGeneratedImage(imageId);
+              if (record != null) {
+                  content.push({
+                      type: "input_image",
+                      image_url: record.dataUrl,
+                  });
+              }
+          }
+          return content;
+      }
+
       function beginRequest(message) {
           const controller = new AbortController();
           const svg = message.querySelector("svg");
@@ -716,62 +730,20 @@
                   throw new Error(message);
               }
 
-              const reader = response.body.getReader();
-              const decoder = new TextDecoder("utf-8");
-              let done = false;
-              let buffer = "";
-
-              while (!done) {
-                  const { value, done: readerDone } = await reader.read();
-                  done = readerDone;
-                  if (done) {
-                      break;
-                  }
-
-                  buffer += decoder.decode(value, { stream: true });
-
-                  let index;
-                  while ((index = buffer.indexOf("\n")) !== -1) {
-                      const line = buffer.slice(0, index).trim();
-                      buffer = buffer.slice(index + 1);
-                      if (line === ""  ||  !line.startsWith("data:")) {
-                          continue;
-                      }
-
-                      const data = line.slice(5).trim();
-                      if (data === "[DONE]") {
-                          done = true;
-                          break;
-                      }
-
-                      try {
-                          const json = JSON.parse(data);
-                          if (json.type == "image_generation.partial_image") {
-                              const format = body["output_format"]  ||  "png";
-                              setPartialGeneratedImage(images, `data:image/${format};base64,${json.b64_json}`);
-                          }
-                          else if (json.type == "image_generation.completed") {
-                              clearGeneratedImagePartials(images);
-                              const format = body["output_format"]  ||  "png";
-                              const imageId = await saveGeneratedImage(`data:image/${format};base64,${json.b64_json}`);
-                              renderGeneratedImage(images, `data:image/${format};base64,${json.b64_json}`, imageId);
-                              localStorage.setItem("history", getHistory());
-                          }
-                          else if (json.type == "error") {
-                              throw new Error(json.error?.message  ||  "Streaming error.");
-                          }
-                      }
-                      catch (error) {
-                          throw new Error(`${error.toString()} in chunk:\n\n${data}`);
-                      }
-                  }
+              const json = await response.json();
+              const format = body["output_format"]  ||  "png";
+              const b64 = json.data?.[0]?.b64_json;
+              if (!b64) {
+                  throw new Error("No image data returned.");
               }
+              const dataUrl = `data:image/${format};base64,${b64}`;
+              const imageId = await saveGeneratedImage(dataUrl);
+              renderGeneratedImage(images, dataUrl, imageId);
 
               finishRequest(message, true);
 
           }).catch(error => {
               if (error.name == "AbortError") {
-                  clearGeneratedImagePartials(images);
                   finishRequest(message, true);
               }
               else {
@@ -814,12 +786,22 @@
               const userText = child.querySelector(".user-message").textContent;
               const assistantText = child.querySelector(".ai-message").dataset.rawText  ||  "";
               const attachments = getAttachmentRecords(child);
+              const generatedImages = await generatedImagesAsInputContent(child);
               if (userText.trim() != ""  ||  attachments.length != 0) {
                   if (attachments.length == 0) {
-                      listOfMessages.push({role: "user", content: userText});
+                      if (generatedImages.length == 0) {
+                          listOfMessages.push({role: "user", content: userText});
+                      }
+                      else {
+                          const content = generatedImages.slice();
+                          if (userText != "") {
+                              content.push({type: "input_text", text: userText});
+                          }
+                          listOfMessages.push({role: "user", content: content});
+                      }
                   }
                   else {
-                      const content = [];
+                      const content = generatedImages.slice();
                       for (const attachment of attachments) {
                           if (attachment.file == null) {
                               throw new Error(`Attachment unavailable: ${attachment.path}. Reattach the file.`);
@@ -844,6 +826,9 @@
                       }
                       listOfMessages.push({role: "user", content: content});
                   }
+              }
+              else if (generatedImages.length != 0) {
+                  listOfMessages.push({role: "user", content: generatedImages});
               }
               if (assistantText.trim() != "") {
                   listOfMessages.push({role: "assistant", content: assistantText});
