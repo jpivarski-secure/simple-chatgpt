@@ -111,6 +111,7 @@
 
       .attachment-controls {
           margin-top: 2px;
+          margin-left: 0;
           color: #ffff00;
       }
 
@@ -632,15 +633,15 @@
       const newMessageAsHTML = `
 <div class="message">
   <div class="user-message" contenteditable="plaintext-only"></div>
+  <svg viewBox="0 0 111.01965 111.47673" width="2em">
+${sendButtonShape}
+${stopButtonShape}
+  </svg>
   <div class="attachment-controls">
     <div class="attachment-list"></div>
     <div><span class="attachment-toggle attachment-add">+</span></div>
     <input class="attachment-input" type="file" multiple style="display:none;">
   </div>
-  <svg viewBox="0 0 111.01965 111.47673" width="2em">
-${sendButtonShape}
-${stopButtonShape}
-  </svg>
   <pre class="ai-message"></pre>
   <div class="sources"></div>
 </div>
