@@ -238,7 +238,7 @@
                   output.textContent += "\n";
               }
           }
-          output.textContent += "-------------------\n";
+          output.textContent += "\n---- Response -----\n";
           if (item.id != null) {
               renderedReasoningItems.add(item.id);
           }
@@ -285,7 +285,7 @@
           if (effort != ""  &&  !model.value.startsWith("gpt-4.1")) {
               body["reasoning"] = {
                   effort: effort,
-                  summary: "detailed",
+                  summary: "concise",
               };
           }
 
