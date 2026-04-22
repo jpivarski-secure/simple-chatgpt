@@ -42,6 +42,9 @@
       }
 
       a {
+          font-family: Arial, Helvetica, sans-serif;
+          font-size: 1em;
+          line-height: 1.2;
           color: #00ff00;
       }
 
@@ -195,7 +198,7 @@
       function getHistory() {
           return JSON.stringify(Array.from(messages.children).map(message => ({
               user: message.querySelector(".user-message").innerText,
-              assistant: message.querySelector(".ai-message").innerText,
+              assistant: message.querySelector(".ai-message").dataset.rawText  ||  "",
               sources: Array.from(message.querySelectorAll(".sources a")).map(x => x.href),
           })));
       }
@@ -267,18 +270,49 @@
           if (item.id != null  &&  renderedReasoningItems.has(item.id)) {
               return;
           }
-          output.textContent += "---- Reasoning ----\n";
+          appendAiMessageText(output, "---- Reasoning -----\n");
           if (Array.isArray(item.summary)) {
               const summary = item.summary.map(x => x.text  ||  "").join("");
-              output.textContent += summary;
+              appendAiMessageText(output, summary);
               if (summary != ""  &&  !summary.endsWith("\n")) {
-                  output.textContent += "\n";
+                  appendAiMessageText(output, "\n");
               }
           }
-          output.textContent += "\n---- Response -----\n";
+          appendAiMessageText(output, "\n---- Response ------\n");
           if (item.id != null) {
               renderedReasoningItems.add(item.id);
           }
+      }
+
+      function renderAiMessage(output) {
+          const text = output.dataset.rawText  ||  "";
+          output.textContent = "";
+          const regex = /\[([^\]]*)\]\(([^)]+)\)/g;
+          let lastIndex = 0;
+          let match;
+          while ((match = regex.exec(text)) != null) {
+              output.appendChild(document.createTextNode(text.slice(lastIndex, match.index)));
+              output.appendChild(document.createTextNode("[" + match[1] + "]("));
+              const a = document.createElement("a");
+              a.href = match[2];
+              a.target = "_blank";
+              a.rel = "noopener noreferrer";
+              a.textContent = match[2];
+              output.appendChild(a);
+              output.appendChild(document.createTextNode(")"));
+              lastIndex = regex.lastIndex;
+          }
+          output.appendChild(document.createTextNode(text.slice(lastIndex)));
+      }
+
+      function setAiMessageText(output, text) {
+          output.dataset.rawText = text;
+          renderAiMessage(output);
+      }
+
+      function appendAiMessageText(output, text) {
+          output.dataset.rawText = (output.dataset.rawText  ||  "") + text;
+          renderAiMessage(output);
       }
 
       function shortenMiddle(text, length) {
@@ -295,7 +329,8 @@
           if (sources.length == 0) {
               return;
           }
-          container.appendChild(document.createTextNode("\n---- References ---\n"));
+          container.appendChild(document.createTextNode("\n---- References ----\n"));
+          container.appendChild(document.createElement("br"));
           for (const url of sources) {
               const a = document.createElement("a");
               a.href = url;
@@ -340,7 +375,7 @@
           }
           const output = message.querySelector(".ai-message");
           const sources = message.querySelector(".sources");
-          output.textContent = "";
+          setAiMessageText(output, "");
           sources.textContent = "";
 
           localStorage.setItem("history", getHistory());
@@ -348,7 +383,7 @@
           let listOfMessages = [{role: "system", content: systemMessage.textContent}];
           for (let child of messages.children) {
               const userText = child.querySelector(".user-message").textContent;
-              const assistantText = child.querySelector(".ai-message").textContent;
+              const assistantText = child.querySelector(".ai-message").dataset.rawText  ||  "";
               if (userText.trim() != "") {
                   listOfMessages.push({role: "user", content: userText});
               }
@@ -435,7 +470,7 @@
                       try {
                           const json = JSON.parse(data);
                           if (json.type == "response.output_text.delta") {
-                              output.textContent += json.delta  ||  "";
+                              appendAiMessageText(output, json.delta  ||  "");
                           }
                           else if (json.type == "response.output_item.done") {
                               appendReasoningSummary(output, json.item);
@@ -465,7 +500,7 @@
                   finishRequest(message, true);
               }
               else {
-                  output.textContent = `[${error.toString()}]`;
+                  setAiMessageText(output, `[${error.toString()}]`);
                   finishRequest(message, false);
               }
           });
@@ -529,10 +564,10 @@ ${stopButtonShape}
                   const last = messages.lastElementChild;
                   last.querySelector(".user-message").innerText = message.user;
                   if (message.assistant == "") {
-                      last.querySelector(".ai-message").innerText = "[No saved response.]";
+                      setAiMessageText(last.querySelector(".ai-message"), "[No saved response.]");
                   }
                   else {
-                      last.querySelector(".ai-message").innerText = message.assistant;
+                      setAiMessageText(last.querySelector(".ai-message"), message.assistant);
                   }
                   if (Array.isArray(message.sources)) {
                       renderSources(last.querySelector(".sources"), message.sources);
