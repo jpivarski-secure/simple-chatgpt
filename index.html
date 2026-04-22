@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta charset="utf-8">
     <title>ChatGPT</title>
     <style>
@@ -42,7 +42,11 @@
       }
 
       a {
-          color: #ffff00;
+          color: #00ff00;
+      }
+
+      a:visited {
+          color: #00ff00;
       }
 
       #controls {
@@ -291,6 +295,7 @@
           if (sources.length == 0) {
               return;
           }
+          container.appendChild(document.createTextNode("\n---- References ---\n"));
           for (const url of sources) {
               const a = document.createElement("a");
               a.href = url;
