@@ -700,14 +700,20 @@
                       listOfMessages.push({role: "user", content: content});
                   }
               }
-              if (assistantText.trim() != "") {
-                  listOfMessages.push({role: "assistant", content: assistantText});
-              }
-              if (generatedImages.length != 0) {
-                  listOfMessages.push({
-                      role: "user",
-                      content: generatedImages,
-                  });
+              if (assistantText.trim() != ""  ||  generatedImages.length != 0) {
+                  if (generatedImages.length == 0) {
+                      listOfMessages.push({role: "assistant", content: assistantText});
+                  }
+                  else {
+                      const content = [];
+                      if (assistantText != "") {
+                          content.push({type: "input_text", text: assistantText});
+                      }
+                      for (const generatedImage of generatedImages) {
+                          content.push(generatedImage);
+                      }
+                      listOfMessages.push({role: "assistant", content: content});
+                  }
               }
           }
 
@@ -843,6 +849,7 @@
                   finishRequest(message, true);
               }
               else {
+                  clearGeneratedImagePartials(images);
                   setAiMessageText(output, `[${error.toString()}]`);
                   finishRequest(message, false);
               }
