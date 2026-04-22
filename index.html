@@ -86,7 +86,7 @@
       }
 
       #messages {
-          margin-bottom: 60vh;
+          margin-bottom: 80vh;
       }
 
       .message {
@@ -676,6 +676,9 @@
       }
 
       async function generateImage(message) {
+          while (message.nextSibling) {
+              messages.removeChild(message.nextSibling);
+          }
           const output = message.querySelector(".ai-message");
           const sources = message.querySelector(".sources");
           const images = message.querySelector(".generated-images");
@@ -774,8 +777,10 @@
           }
           const output = message.querySelector(".ai-message");
           const sources = message.querySelector(".sources");
+          const images = message.querySelector(".generated-images");
           setAiMessageText(output, "");
           sources.textContent = "";
+          images.textContent = "";
 
           localStorage.setItem("history", getHistory());
 
