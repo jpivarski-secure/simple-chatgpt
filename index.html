@@ -37,6 +37,30 @@
           line-height: 1.2;
       }
 
+      #controls {
+          position: relative;
+      }
+
+      #reasoning-menu {
+          position: absolute;
+          top: calc(100% + 2px);
+          left: 75px;
+          display: none;
+          border: 1px solid #808000;
+          background: black;
+          color: #ffff00;
+          z-index: 10;
+      }
+
+      .reasoning-option {
+          padding: 4px 8px;
+          border-bottom: 1px solid #808000;
+      }
+
+      .reasoning-option:last-child {
+          border-bottom: 0;
+      }
+
       #messages {
           margin-bottom: 60vh;
       }
@@ -87,10 +111,20 @@
       </div>
     </details>
 
-    <input id="model" size="8" type="input" placeholder="Model...">
-    <input id="reasoning-effort" size="6" type="input" placeholder="Reason...">
-    <input id="temp" size="4" type="input" placeholder="Temp...">
-    <input id="key" size="4" type="password" placeholder="API key...">
+    <div id="controls">
+      <input id="model" size="8" type="input" placeholder="Model...">
+      <input id="reasoning-effort" size="6" type="input" placeholder="Reason...">
+      <input id="temp" size="4" type="input" placeholder="Temp...">
+      <input id="key" size="4" type="password" placeholder="API key...">
+      <div id="reasoning-menu">
+        <div class="reasoning-option">none</div>
+        <div class="reasoning-option">minimal</div>
+        <div class="reasoning-option">low</div>
+        <div class="reasoning-option">medium</div>
+        <div class="reasoning-option">high</div>
+        <div class="reasoning-option">xhigh</div>
+      </div>
+    </div>
 
     <div id="messages"></div>
 
@@ -178,6 +212,14 @@
           }
       }
 
+      function showReasoningMenu() {
+          reasoningMenu.style.display = "";
+      }
+
+      function hideReasoningMenu() {
+          reasoningMenu.style.display = "none";
+      }
+
       function send(message) {
           if (activeRequest != null) {
               return;
@@ -239,7 +281,14 @@
 
           }).then(async response => {
               if (!response.ok) {
-                  throw new Error(`HTML response is ${response.status}.`);
+                  let message = `HTML response is ${response.status}.`;
+                  try {
+                      const errorBody = await response.json();
+                      message = errorBody.error?.message  ||  message;
+                  }
+                  catch (error) {
+                  }
+                  throw new Error(message);
               }
 
               const reader = response.body.getReader();
@@ -318,6 +367,7 @@
       let systemMessage = document.getElementById("system-message");
       let model = document.getElementById("model");
       let reasoningEffort = document.getElementById("reasoning-effort");
+      let reasoningMenu = document.getElementById("reasoning-menu");
       let temp = document.getElementById("temp");
       let key = document.getElementById("key");
       let activeRequest = null;
@@ -340,6 +390,22 @@ ${stopButtonShape}
   <pre class="ai-message"></pre>
 </div>
 `;
+
+      reasoningEffort.addEventListener("focus", showReasoningMenu);
+      reasoningEffort.addEventListener("click", showReasoningMenu);
+      reasoningEffort.addEventListener("input", showReasoningMenu);
+      reasoningEffort.addEventListener("blur", () => {
+          setTimeout(hideReasoningMenu, 100);
+      });
+      for (const option of reasoningMenu.children) {
+          option.addEventListener("mousedown", event => {
+              event.preventDefault();
+              reasoningEffort.value = option.textContent;
+              localStorage.setItem("reasoning-effort", reasoningEffort.value);
+              hideReasoningMenu();
+              reasoningEffort.blur();
+          });
+      }
 
       const history = localStorage.getItem("history")  ||  "";
       if (history == "") {
