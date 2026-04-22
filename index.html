@@ -223,6 +223,27 @@
           reasoningMenu.style.display = "none";
       }
 
+      function appendReasoningSummary(output, item) {
+          if (item == null  ||  item.type != "reasoning"  ||  !("summary" in item)) {
+              return;
+          }
+          if (item.id != null  &&  renderedReasoningItems.has(item.id)) {
+              return;
+          }
+          output.textContent += "---- Reasoning ----\n";
+          if (Array.isArray(item.summary)) {
+              const summary = item.summary.map(x => x.text  ||  "").join("");
+              output.textContent += summary;
+              if (summary != ""  &&  !summary.endsWith("\n")) {
+                  output.textContent += "\n";
+              }
+          }
+          output.textContent += "-------------------\n";
+          if (item.id != null) {
+              renderedReasoningItems.add(item.id);
+          }
+      }
+
       function send(message) {
           if (activeRequest != null) {
               return;
@@ -264,12 +285,13 @@
           if (effort != ""  &&  !model.value.startsWith("gpt-4.1")) {
               body["reasoning"] = {
                   effort: effort,
-                  summary: "concise",
+                  summary: "detailed",
               };
           }
 
           const controller = new AbortController();
           const svg = message.querySelector("svg");
+          renderedReasoningItems = new Set();
           setButtonToStop(svg);
           activeRequest = {message: message, controller: controller};
 
@@ -327,20 +349,14 @@
                           if (json.type == "response.output_text.delta") {
                               output.textContent += json.delta  ||  "";
                           }
-                          else if (
-                              json.type == "response.reasoning_summary_text.delta"  ||
-                              json.type == "response.reasoning_summary.delta"
-                          ) {
-                              output.textContent += json.delta  ||  "";
+                          else if (json.type == "response.output_item.done") {
+                              appendReasoningSummary(output, json.item);
                           }
-                          else if (
-                              json.type == "response.output_item.done"  &&
-                              json.item?.type == "reasoning"  &&
-                              Array.isArray(json.item.summary)
-                          ) {
-                              const summary = json.item.summary.map(x => x.text  ||  "").join("");
-                              if (summary != "") {
-                                  output.textContent += summary;
+                          else if (json.type == "response.completed") {
+                              if (Array.isArray(json.response?.output)) {
+                                  for (const item of json.response.output) {
+                                      appendReasoningSummary(output, item);
+                                  }
                               }
                           }
                           else if (json.type == "error") {
@@ -374,6 +390,7 @@
       let temp = document.getElementById("temp");
       let key = document.getElementById("key");
       let activeRequest = null;
+      let renderedReasoningItems = new Set();
       const sendButtonShape = `
     <g class="send-shape" transform="translate(-38.425328,-84.136154)">
       <path style="fill:#ffff00;stroke:#ffff00;stroke-width:10;stroke-linejoin:round;" d="M 52.567223,151.75928 43.425096,190.61331 144.44559,139.87452 43.425096,89.135727 l 9.142127,38.854033 91.878367,11.88476 z"/>
