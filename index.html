@@ -114,6 +114,10 @@
       syncInputToLocalStorage("key");
 
       document.getElementById("clear-all").addEventListener("click", () => {
+          if (activeRequest != null) {
+              activeRequest.controller.abort();
+              activeRequest = null;
+          }
           while (messages.firstChild) {
               messages.removeChild(messages.firstChild);
           }
@@ -131,12 +135,38 @@
       function newUserMessage() {
           messages.insertAdjacentHTML("beforeend", newMessageAsHTML);
           const message = messages.lastElementChild;
-          const div = message.firstElementChild;
           const svg = message.querySelector("svg");
           svg.addEventListener("click", () => send(message));
       }
 
+      function setButtonToSend(svg) {
+          svg.innerHTML = sendButtonPath;
+      }
+
+      function setButtonToStop(svg) {
+          svg.innerHTML = stopButtonCircle;
+      }
+
+      function finishRequest(message, needsNewMessage) {
+          activeRequest = null;
+          if (!message.isConnected) {
+              return;
+          }
+          const svg = message.querySelector("svg");
+          setButtonToSend(svg);
+          localStorage.setItem("history", getHistory());
+          if (needsNewMessage) {
+              newUserMessage();
+          }
+      }
+
       function send(message) {
+          if (activeRequest != null) {
+              if (activeRequest.message == message) {
+                  activeRequest.controller.abort();
+              }
+              return;
+          }
           if (!model.value  ||  !temp.value  ||  !key.value) {
               return;
           }
@@ -178,12 +208,18 @@
               };
           }
 
+          const controller = new AbortController();
+          const svg = message.querySelector("svg");
+          setButtonToStop(svg);
+          activeRequest = {message: message, controller: controller};
+
           fetch("https://api.openai.com/v1/responses", {
               method: "POST",
               headers: {
                   "Content-Type": "application/json",
                   "Authorization": "Bearer " + key.value,
               },
+              signal: controller.signal,
               body: JSON.stringify(body),
 
           }).then(async response => {
@@ -250,12 +286,16 @@
                   }
               }
 
-              localStorage.setItem("history", getHistory());
-
-              newUserMessage();
+              finishRequest(message, true);
 
           }).catch(error => {
-              output.textContent = `[${error.toString()}]`;
+              if (error.name == "AbortError") {
+                  finishRequest(message, true);
+              }
+              else {
+                  output.textContent = `[${error.toString()}]`;
+                  finishRequest(message, false);
+              }
           });
       }
 
@@ -265,14 +305,21 @@
       let reasoningEffort = document.getElementById("reasoning-effort");
       let temp = document.getElementById("temp");
       let key = document.getElementById("key");
+      let activeRequest = null;
+      const sendButtonPath = `
+    <g transform="translate(-38.425328,-84.136154)">
+      <path style="fill:#ffff00;stroke:#ffff00;stroke-width:10;stroke-linejoin:round;" d="M 52.567223,151.75928 43.425096,190.61331 144.44559,139.87452 43.425096,89.135727 l 9.142127,38.854033 91.878367,11.88476 z"/>
+    </g>
+`;
+      const stopButtonCircle = `
+    <circle cx="55.509825" cy="55.738365" r="34" style="fill:#ffff00;stroke:#ffff00;stroke-width:10;stroke-linejoin:round;"/>
+`;
 
       const newMessageAsHTML = `
 <div class="message">
   <div class="user-message" contenteditable="plaintext-only"></div>
   <svg viewBox="0 0 111.01965 111.47673" width="2em">
-    <g transform="translate(-38.425328,-84.136154)">
-      <path style="fill:#ffff00;stroke:#ffff00;stroke-width:10;stroke-linejoin:round;" d="M 52.567223,151.75928 43.425096,190.61331 144.44559,139.87452 43.425096,89.135727 l 9.142127,38.854033 91.878367,11.88476 z"/>
-    </g>
+${sendButtonPath}
   </svg>
   <pre class="ai-message"></pre>
 </div>
