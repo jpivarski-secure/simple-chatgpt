@@ -164,14 +164,15 @@
           let body = {
               model: model.value,
               temperature: temperature,
-              messages: listOfMessages,
+              input: listOfMessages,
+              store: false,
               stream: true,
           };
           if (model.value.startsWith("gpt-5")) {
-              body["reasoning_effort"] = "none";
+              body["reasoning"] = {effort: "none"};
           }
 
-          fetch("https://api.openai.com/v1/chat/completions", {
+          fetch("https://api.openai.com/v1/responses", {
               method: "POST",
               headers: {
                   "Content-Type": "application/json",
@@ -214,7 +215,12 @@
 
                       try {
                           const json = JSON.parse(data);
-                          output.textContent += json.choices?.[0]?.delta?.content  ||  "";
+                          if (json.type == "response.output_text.delta") {
+                              output.textContent += json.delta  ||  "";
+                          }
+                          else if (json.type == "error") {
+                              throw new Error(json.error?.message  ||  "Streaming error.");
+                          }
                       }
                       catch (error) {
                           throw new Error(`${error.toString()} in chunk:\n\n${data}`);
