@@ -165,13 +165,7 @@
 
     <div id="controls">
       <div class="controls-row">
-        <span class="menu-wrapper">
-          <input id="model" size="8" type="input" placeholder="Model...">
-          <div id="model-menu" class="choice-menu">
-            <div class="choice-option">gpt-5.4</div>
-            <div class="choice-option">gpt-image-2</div>
-          </div>
-        </span>
+        <input id="model" size="8" type="input" placeholder="Model...">
         <span class="menu-wrapper">
           <input id="reasoning-effort" size="6" type="input" placeholder="Reason...">
           <div id="reasoning-menu" class="choice-menu">
@@ -188,16 +182,13 @@
       </div>
       <div class="controls-row">
         <label><input id="web-search" type="checkbox"> web</label>
+        <input id="image-model" size="10" type="input" placeholder="Image model...">
         <span class="menu-wrapper">
           <input id="image-size" size="7" type="input" placeholder="Size...">
           <div id="image-size-menu" class="choice-menu">
             <div class="choice-option">1024x1024</div>
             <div class="choice-option">1536x1024</div>
             <div class="choice-option">1024x1536</div>
-            <div class="choice-option">2048x2048</div>
-            <div class="choice-option">2048x1152</div>
-            <div class="choice-option">3840x2160</div>
-            <div class="choice-option">2160x3840</div>
           </div>
         </span>
         <span class="menu-wrapper">
@@ -206,20 +197,6 @@
             <div class="choice-option">low</div>
             <div class="choice-option">medium</div>
             <div class="choice-option">high</div>
-          </div>
-        </span>
-        <span class="menu-wrapper">
-          <input id="image-format" size="2" type="input" placeholder="Fmt...">
-          <div id="image-format-menu" class="choice-menu">
-            <div class="choice-option">png</div>
-            <div class="choice-option">jpeg</div>
-          </div>
-        </span>
-        <span class="menu-wrapper">
-          <input id="image-moderation" size="2" type="input" placeholder="Mod...">
-          <div id="image-moderation-menu" class="choice-menu">
-            <div class="choice-option">auto</div>
-            <div class="choice-option">low</div>
           </div>
         </span>
       </div>
@@ -245,10 +222,9 @@
       syncInputToLocalStorage("reasoning-effort");
       syncInputToLocalStorage("temp");
       syncInputToLocalStorage("key");
+      syncInputToLocalStorage("image-model");
       syncInputToLocalStorage("image-size");
       syncInputToLocalStorage("image-quality");
-      syncInputToLocalStorage("image-format");
-      syncInputToLocalStorage("image-moderation");
       syncCheckboxToLocalStorage("web-search");
 
       document.getElementById("clear-all").addEventListener("click", async () => {
@@ -676,6 +652,9 @@
       }
 
       async function generateImage(message) {
+          if (!imageModel.value) {
+              return;
+          }
           while (message.nextSibling) {
               messages.removeChild(message.nextSibling);
           }
@@ -689,7 +668,7 @@
           localStorage.setItem("history", getHistory());
 
           const body = {
-              model: model.value,
+              model: imageModel.value,
               prompt: buildImagePrompt(message),
           };
           if (imageSize.value.trim() != "") {
@@ -697,15 +676,6 @@
           }
           if (imageQuality.value.trim() != "") {
               body["quality"] = imageQuality.value.trim();
-          }
-          if (imageFormat.value.trim() != "") {
-              body["output_format"] = imageFormat.value.trim();
-              if (imageFormat.value.trim() == "jpeg") {
-                  body["output_compression"] = 90;
-              }
-          }
-          if (imageModeration.value.trim() != "") {
-              body["moderation"] = imageModeration.value.trim();
           }
 
           const controller = beginRequest(message);
@@ -732,12 +702,11 @@
               }
 
               const json = await response.json();
-              const format = body["output_format"]  ||  "png";
               const b64 = json.data?.[0]?.b64_json;
               if (!b64) {
                   throw new Error("No image data returned.");
               }
-              const dataUrl = `data:image/${format};base64,${b64}`;
+              const dataUrl = `data:image/png;base64,${b64}`;
               const imageId = await saveGeneratedImage(dataUrl);
               renderGeneratedImage(images, dataUrl, imageId);
 
@@ -761,7 +730,7 @@
           if (!model.value  ||  !key.value) {
               return;
           }
-          if (isImageGenerationModel(model.value)) {
+          if (isImageGenerationModel(imageModel.value)) {
               return await generateImage(message);
           }
           if (!temp.value) {
@@ -951,20 +920,16 @@
       let messages = document.getElementById("messages");
       let systemMessage = document.getElementById("system-message");
       let model = document.getElementById("model");
-      let modelMenu = document.getElementById("model-menu");
       let reasoningEffort = document.getElementById("reasoning-effort");
       let reasoningMenu = document.getElementById("reasoning-menu");
       let temp = document.getElementById("temp");
       let key = document.getElementById("key");
       let webSearch = document.getElementById("web-search");
+      let imageModel = document.getElementById("image-model");
       let imageSize = document.getElementById("image-size");
       let imageSizeMenu = document.getElementById("image-size-menu");
       let imageQuality = document.getElementById("image-quality");
       let imageQualityMenu = document.getElementById("image-quality-menu");
-      let imageFormat = document.getElementById("image-format");
-      let imageFormatMenu = document.getElementById("image-format-menu");
-      let imageModeration = document.getElementById("image-moderation");
-      let imageModerationMenu = document.getElementById("image-moderation-menu");
       let activeRequest = null;
       let renderedReasoningItems = new Set();
       let attachedFiles = new Map();
@@ -998,12 +963,9 @@ ${stopButtonShape}
 </div>
 `;
 
-      setupChoiceMenu(model, modelMenu, "model");
       setupChoiceMenu(reasoningEffort, reasoningMenu, "reasoning-effort");
       setupChoiceMenu(imageSize, imageSizeMenu, "image-size");
       setupChoiceMenu(imageQuality, imageQualityMenu, "image-quality");
-      setupChoiceMenu(imageFormat, imageFormatMenu, "image-format");
-      setupChoiceMenu(imageModeration, imageModerationMenu, "image-moderation");
 
       (async () => {
           const history = localStorage.getItem("history")  ||  "";
