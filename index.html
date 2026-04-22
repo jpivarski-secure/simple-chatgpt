@@ -182,7 +182,7 @@
       </div>
       <div class="controls-row">
         <label><input id="web-search" type="checkbox"> web</label>
-        <input id="image-model" size="10" type="input" placeholder="Image model...">
+        <label><input id="image-generation" type="checkbox"> image</label>
         <span class="menu-wrapper">
           <input id="image-size" size="7" type="input" placeholder="Size...">
           <div id="image-size-menu" class="choice-menu">
@@ -222,10 +222,10 @@
       syncInputToLocalStorage("reasoning-effort");
       syncInputToLocalStorage("temp");
       syncInputToLocalStorage("key");
-      syncInputToLocalStorage("image-model");
       syncInputToLocalStorage("image-size");
       syncInputToLocalStorage("image-quality");
       syncCheckboxToLocalStorage("web-search");
+      syncCheckboxToLocalStorage("image-generation");
 
       document.getElementById("clear-all").addEventListener("click", async () => {
           if (activeRequest != null) {
@@ -619,7 +619,7 @@
       }
 
       function imageToolConfig() {
-          if (!imageModel.value.trim().startsWith("gpt-image-")) {
+          if (!imageGeneration.checked) {
               return null;
           }
           const tool = {
@@ -857,7 +857,7 @@
       let temp = document.getElementById("temp");
       let key = document.getElementById("key");
       let webSearch = document.getElementById("web-search");
-      let imageModel = document.getElementById("image-model");
+      let imageGeneration = document.getElementById("image-generation");
       let imageSize = document.getElementById("image-size");
       let imageSizeMenu = document.getElementById("image-size-menu");
       let imageQuality = document.getElementById("image-quality");
