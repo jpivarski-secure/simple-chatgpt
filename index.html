@@ -136,15 +136,27 @@
           messages.insertAdjacentHTML("beforeend", newMessageAsHTML);
           const message = messages.lastElementChild;
           const svg = message.querySelector("svg");
-          svg.addEventListener("click", () => send(message));
+          svg.dataset.mode = "send";
+          svg.addEventListener("click", () => {
+              if (svg.dataset.mode == "stop") {
+                  stop(message);
+              }
+              else {
+                  send(message);
+              }
+          });
       }
 
       function setButtonToSend(svg) {
-          svg.innerHTML = sendButtonPath;
+          svg.dataset.mode = "send";
+          svg.querySelector(".send-shape").style.display = "";
+          svg.querySelector(".stop-shape").style.display = "none";
       }
 
       function setButtonToStop(svg) {
-          svg.innerHTML = stopButtonCircle;
+          svg.dataset.mode = "stop";
+          svg.querySelector(".send-shape").style.display = "none";
+          svg.querySelector(".stop-shape").style.display = "";
       }
 
       function finishRequest(message, needsNewMessage) {
@@ -160,11 +172,14 @@
           }
       }
 
+      function stop(message) {
+          if (activeRequest != null  &&  activeRequest.message == message) {
+              activeRequest.controller.abort();
+          }
+      }
+
       function send(message) {
           if (activeRequest != null) {
-              if (activeRequest.message == message) {
-                  activeRequest.controller.abort();
-              }
               return;
           }
           if (!model.value  ||  !temp.value  ||  !key.value) {
@@ -306,20 +321,21 @@
       let temp = document.getElementById("temp");
       let key = document.getElementById("key");
       let activeRequest = null;
-      const sendButtonPath = `
-    <g transform="translate(-38.425328,-84.136154)">
+      const sendButtonShape = `
+    <g class="send-shape" transform="translate(-38.425328,-84.136154)">
       <path style="fill:#ffff00;stroke:#ffff00;stroke-width:10;stroke-linejoin:round;" d="M 52.567223,151.75928 43.425096,190.61331 144.44559,139.87452 43.425096,89.135727 l 9.142127,38.854033 91.878367,11.88476 z"/>
     </g>
 `;
-      const stopButtonCircle = `
-    <circle cx="55.509825" cy="55.738365" r="34" style="fill:#ffff00;stroke:#ffff00;stroke-width:10;stroke-linejoin:round;"/>
+      const stopButtonShape = `
+    <circle class="stop-shape" cx="55.509825" cy="55.738365" r="34" style="display:none;fill:#ffff00;stroke:#ffff00;stroke-width:10;stroke-linejoin:round;"/>
 `;
 
       const newMessageAsHTML = `
 <div class="message">
   <div class="user-message" contenteditable="plaintext-only"></div>
   <svg viewBox="0 0 111.01965 111.47673" width="2em">
-${sendButtonPath}
+${sendButtonShape}
+${stopButtonShape}
   </svg>
   <pre class="ai-message"></pre>
 </div>
