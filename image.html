@@ -1,0 +1,1051 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta charset="utf-8">
+    <title>ChatGPT</title>
+    <style>
+      body {
+          font-family: Arial, Helvetica, sans-serif;
+          background: black;
+          font-size: 1em;
+          line-height: 1.2;
+      }
+
+      #clear-all {
+          float: right;
+          background: black;
+          color: yellow;
+          font-size: 1em;
+          line-height: 1.2;
+          border: 1px solid #808000;
+      }
+
+      details {
+          color: #ffff00;
+          margin-bottom: 10px;
+          font-size: 1em;
+          line-height: 1.2;
+      }
+
+      input {
+          border: 1px solid #808000;
+          background: black;
+          color: #ffff00;
+          outline: none;
+          font-size: 1em;
+          line-height: 1.2;
+      }
+
+      label {
+          color: #ffff00;
+      }
+
+      a {
+          font-family: Arial, Helvetica, sans-serif;
+          font-size: 1em;
+          line-height: 1.2;
+          color: #00ff00;
+      }
+
+      a:visited {
+          color: #00ff00;
+      }
+
+      #controls {
+          margin-bottom: 6px;
+      }
+
+      .controls-row {
+          margin-bottom: 4px;
+      }
+
+      .menu-wrapper {
+          position: relative;
+          display: inline-block;
+      }
+
+      .choice-menu {
+          position: absolute;
+          top: calc(100% + 2px);
+          left: 0;
+          display: none;
+          border: 1px solid #808000;
+          background: black;
+          color: #ffff00;
+          z-index: 10;
+      }
+
+      .choice-option {
+          padding: 4px 8px;
+          border-bottom: 1px solid #808000;
+      }
+
+      .choice-option:last-child {
+          border-bottom: 0;
+      }
+
+      #messages {
+          margin-bottom: 80vh;
+      }
+
+      .message {
+          width: 100%;
+          margin-top: 10px;
+          color: #ffff00;
+      }
+
+      .user-message {
+          display: inline-block;
+          width: calc(100% - 50px);
+          min-height: 1em;
+          overflow: hidden;
+          outline: none;
+          resize: none;
+          padding: 8px;
+          box-sizing: border-box;
+          border: 1px solid #808000;
+          font-size: 1em;
+          line-height: 1.2;
+      }
+
+      .attachment-controls {
+          margin-top: 2px;
+          margin-left: 0;
+          color: #ffff00;
+      }
+
+      .attachment-line {
+          white-space: pre-wrap;
+      }
+
+      .attachment-toggle {
+          display: inline-block;
+          width: 1em;
+          text-align: center;
+          cursor: pointer;
+          user-select: none;
+      }
+
+      .message svg {
+          margin-left: 3px;
+          margin-bottom: 3px;
+      }
+
+      .ai-message {
+          font-family: Arial, Helvetica, sans-serif;
+          padding: 2px;
+          margin: 0;
+          white-space: pre-wrap;
+          color: #00ff00;
+          font-size: 1em;
+          line-height: 1.2;
+      }
+
+      .sources {
+          margin-top: 4px;
+      }
+
+      .generated-images img {
+          display: block;
+          width: 100%;
+          margin-top: 4px;
+      }
+
+    </style>
+  </head>
+  <body>
+    <button id="clear-all">Clear</button>
+
+    <details><summary>System</summary>
+      <div class="message">
+        <div class="user-message" id="system-message" contenteditable="plaintext-only"></div>
+      </div>
+    </details>
+
+    <div id="controls">
+      <div class="controls-row">
+        <span class="menu-wrapper">
+          <input id="model" size="8" type="input" placeholder="Model...">
+          <div id="model-menu" class="choice-menu">
+            <div class="choice-option">gpt-5.4</div>
+            <div class="choice-option">gpt-image-2</div>
+          </div>
+        </span>
+        <span class="menu-wrapper">
+          <input id="reasoning-effort" size="6" type="input" placeholder="Reason...">
+          <div id="reasoning-menu" class="choice-menu">
+            <div class="choice-option">none</div>
+            <div class="choice-option">minimal</div>
+            <div class="choice-option">low</div>
+            <div class="choice-option">medium</div>
+            <div class="choice-option">high</div>
+            <div class="choice-option">xhigh</div>
+          </div>
+        </span>
+        <input id="temp" size="4" type="input" placeholder="Temp...">
+        <input id="key" size="4" type="password" placeholder="API key...">
+      </div>
+      <div class="controls-row">
+        <label><input id="web-search" type="checkbox"> web</label>
+        <span class="menu-wrapper">
+          <input id="image-size" size="7" type="input" placeholder="Size...">
+          <div id="image-size-menu" class="choice-menu">
+            <div class="choice-option">1024x1024</div>
+            <div class="choice-option">1536x1024</div>
+            <div class="choice-option">1024x1536</div>
+            <div class="choice-option">2048x2048</div>
+            <div class="choice-option">2048x1152</div>
+            <div class="choice-option">3840x2160</div>
+            <div class="choice-option">2160x3840</div>
+          </div>
+        </span>
+        <span class="menu-wrapper">
+          <input id="image-quality" size="4" type="input" placeholder="Qual...">
+          <div id="image-quality-menu" class="choice-menu">
+            <div class="choice-option">low</div>
+            <div class="choice-option">medium</div>
+            <div class="choice-option">high</div>
+          </div>
+        </span>
+        <span class="menu-wrapper">
+          <input id="image-format" size="2" type="input" placeholder="Fmt...">
+          <div id="image-format-menu" class="choice-menu">
+            <div class="choice-option">png</div>
+            <div class="choice-option">jpeg</div>
+          </div>
+        </span>
+        <span class="menu-wrapper">
+          <input id="image-moderation" size="2" type="input" placeholder="Mod...">
+          <div id="image-moderation-menu" class="choice-menu">
+            <div class="choice-option">auto</div>
+            <div class="choice-option">low</div>
+          </div>
+        </span>
+      </div>
+    </div>
+
+    <div id="messages"></div>
+
+    <script>
+      const STORAGE_PREFIX = "image-";
+
+      function storageKey(key) {
+          return STORAGE_PREFIX + key;
+      }
+
+      function syncDivToLocalStorage(id) {
+          const element = document.getElementById(id);
+          element.textContent = localStorage.getItem(storageKey(id))  ||  "You are multimodal assistant that can understand text and images, discuss visual content, and generate images according to user requests.";
+          element.addEventListener("input", () => { localStorage.setItem(storageKey(id), element.textContent); });
+          element.addEventListener("paste", () => { localStorage.setItem(storageKey(id), element.textContent); });
+      }
+      function syncInputToLocalStorage(id) {
+          const element = document.getElementById(id);
+          element.value = localStorage.getItem(storageKey(id))  ||  "";
+          element.addEventListener("input", () => { localStorage.setItem(storageKey(id), element.value); });
+          element.addEventListener("paste", () => { localStorage.setItem(storageKey(id), element.value); });
+      }
+      syncDivToLocalStorage("system-message");
+      syncInputToLocalStorage("model");
+      syncInputToLocalStorage("reasoning-effort");
+      syncInputToLocalStorage("temp");
+      syncInputToLocalStorage("key");
+      syncInputToLocalStorage("image-size");
+      syncInputToLocalStorage("image-quality");
+      syncInputToLocalStorage("image-format");
+      syncInputToLocalStorage("image-moderation");
+      syncCheckboxToLocalStorage("web-search");
+
+      document.getElementById("clear-all").addEventListener("click", async () => {
+          if (activeRequest != null) {
+              activeRequest.controller.abort();
+              activeRequest = null;
+          }
+          attachedFiles.clear();
+          await clearGeneratedImages().catch(() => {});
+          while (messages.firstChild) {
+              messages.removeChild(messages.firstChild);
+          }
+          newUserMessage();
+          localStorage.setItem(storageKey("history"), "");
+      });
+
+      function getHistory() {
+          return JSON.stringify(Array.from(messages.children).map(message => ({
+              user: message.querySelector(".user-message").innerText,
+              assistant: message.querySelector(".ai-message").dataset.rawText  ||  "",
+              sources: Array.from(message.querySelectorAll(".sources a")).map(x => x.href),
+              attachments: Array.from(message.querySelectorAll(".attachment-line")).map(x => x.dataset.path),
+              generatedImages: Array.from(message.querySelectorAll(".generated-images img[data-image-id]")).map(x => x.dataset.imageId),
+          })));
+      }
+
+      function syncCheckboxToLocalStorage(id) {
+          const element = document.getElementById(id);
+          element.checked = localStorage.getItem(storageKey(id)) == "true";
+          element.addEventListener("change", () => { localStorage.setItem(storageKey(id), element.checked); });
+      }
+
+      function openGeneratedImagesDb() {
+          return new Promise((resolve, reject) => {
+              const request = indexedDB.open("image-simple-chatgpt-images", 1);
+              request.onupgradeneeded = () => {
+                  request.result.createObjectStore("images", {keyPath: "id"});
+              };
+              request.onsuccess = () => resolve(request.result);
+              request.onerror = () => reject(request.error);
+          });
+      }
+
+      async function withImageStore(mode, callback) {
+          const db = await generatedImagesDbPromise;
+          return await new Promise((resolve, reject) => {
+              const transaction = db.transaction("images", mode);
+              const store = transaction.objectStore("images");
+              const result = callback(store);
+              transaction.oncomplete = () => resolve(result);
+              transaction.onerror = () => reject(transaction.error);
+              transaction.onabort = () => reject(transaction.error);
+          });
+      }
+
+      async function saveGeneratedImage(dataUrl) {
+          generatedImageCounter += 1;
+          const id = "generated-image-" + Date.now() + "-" + generatedImageCounter;
+          await withImageStore("readwrite", store => {
+              store.put({id: id, dataUrl: dataUrl});
+          });
+          return id;
+      }
+
+      async function loadGeneratedImage(id) {
+          const db = await generatedImagesDbPromise;
+          return await new Promise((resolve, reject) => {
+              const transaction = db.transaction("images", "readonly");
+              const store = transaction.objectStore("images");
+              const request = store.get(id);
+              request.onsuccess = () => resolve(request.result  ||  null);
+              request.onerror = () => reject(request.error);
+          });
+      }
+
+      async function clearGeneratedImages() {
+          await withImageStore("readwrite", store => {
+              store.clear();
+          });
+      }
+
+      function newUserMessage() {
+          messages.insertAdjacentHTML("beforeend", newMessageAsHTML);
+          const message = messages.lastElementChild;
+          const svg = message.querySelector("svg");
+          const fileInput = message.querySelector(".attachment-input");
+          const addButton = message.querySelector(".attachment-add");
+          svg.dataset.mode = "send";
+          svg.addEventListener("click", () => {
+              if (svg.dataset.mode == "stop") {
+                  stop(message);
+              }
+              else {
+                  send(message).catch(error => {
+                      setAiMessageText(message.querySelector(".ai-message"), `[${error.toString()}]`);
+                  });
+              }
+          });
+          addButton.addEventListener("click", () => fileInput.click());
+          fileInput.addEventListener("change", () => {
+              for (const file of fileInput.files) {
+                  addAttachment(message, file, getAttachmentPath(file, fileInput));
+              }
+              fileInput.value = "";
+          });
+      }
+
+      function setButtonToSend(svg) {
+          svg.dataset.mode = "send";
+          svg.querySelector(".send-shape").style.display = "";
+          svg.querySelector(".stop-shape").style.display = "none";
+      }
+
+      function setButtonToStop(svg) {
+          svg.dataset.mode = "stop";
+          svg.querySelector(".send-shape").style.display = "none";
+          svg.querySelector(".stop-shape").style.display = "";
+      }
+
+      function finishRequest(message, needsNewMessage) {
+          activeRequest = null;
+          if (!message.isConnected) {
+              return;
+          }
+          const svg = message.querySelector("svg");
+          setButtonToSend(svg);
+          localStorage.setItem(storageKey("history"), getHistory());
+          if (needsNewMessage) {
+              newUserMessage();
+          }
+      }
+
+      function stop(message) {
+          if (activeRequest != null  &&  activeRequest.message == message) {
+              activeRequest.controller.abort();
+          }
+      }
+
+      function showMenu(menu) {
+          menu.style.display = "block";
+      }
+
+      function hideMenu(menu) {
+          menu.style.display = "none";
+      }
+
+      function setupChoiceMenu(input, menu, storageId) {
+          function selectOption(option) {
+              input.value = option.textContent;
+              localStorage.setItem(storageKey(storageId), input.value);
+              hideMenu(menu);
+              input.blur();
+          }
+
+          input.addEventListener("focus", () => showMenu(menu));
+          input.addEventListener("click", () => showMenu(menu));
+          input.addEventListener("input", () => showMenu(menu));
+          input.addEventListener("blur", () => {
+              setTimeout(() => hideMenu(menu), 100);
+          });
+          menu.addEventListener("pointerdown", event => {
+              const option = event.target.closest(".choice-option");
+              if (option == null) {
+                  return;
+              }
+              event.preventDefault();
+              selectOption(option);
+          });
+          menu.addEventListener("mousedown", event => {
+              const option = event.target.closest(".choice-option");
+              if (option == null) {
+                  return;
+              }
+              event.preventDefault();
+              selectOption(option);
+          });
+      }
+
+      function appendReasoningSummary(output, item) {
+          if (item == null  ||  item.type != "reasoning"  ||  !("summary" in item)) {
+              return;
+          }
+          if (item.id != null  &&  renderedReasoningItems.has(item.id)) {
+              return;
+          }
+          appendAiMessageText(output, "---- Reasoning -----\n");
+          if (Array.isArray(item.summary)) {
+              const summary = item.summary.map(x => x.text  ||  "").join("");
+              appendAiMessageText(output, summary);
+              if (summary != ""  &&  !summary.endsWith("\n")) {
+                  appendAiMessageText(output, "\n");
+              }
+          }
+          appendAiMessageText(output, "\n---- Response ------\n");
+          if (item.id != null) {
+              renderedReasoningItems.add(item.id);
+          }
+      }
+
+      function renderAiMessage(output) {
+          const text = output.dataset.rawText  ||  "";
+          output.textContent = "";
+          const regex = /\[([^\]]*)\]\(([^)]+)\)/g;
+          let lastIndex = 0;
+          let match;
+          while ((match = regex.exec(text)) != null) {
+              output.appendChild(document.createTextNode(text.slice(lastIndex, match.index)));
+              output.appendChild(document.createTextNode("[" + match[1] + "]("));
+              const a = document.createElement("a");
+              a.href = match[2];
+              a.target = "_blank";
+              a.rel = "noopener noreferrer";
+              a.textContent = match[2];
+              output.appendChild(a);
+              output.appendChild(document.createTextNode(")"));
+              lastIndex = regex.lastIndex;
+          }
+          output.appendChild(document.createTextNode(text.slice(lastIndex)));
+      }
+
+      function setAiMessageText(output, text) {
+          output.dataset.rawText = text;
+          renderAiMessage(output);
+      }
+
+      function appendAiMessageText(output, text) {
+          output.dataset.rawText = (output.dataset.rawText  ||  "") + text;
+          renderAiMessage(output);
+      }
+
+      function shortenMiddle(text, length) {
+          if (text.length <= length) {
+              return text;
+          }
+          const left = Math.ceil((length - 3) / 2);
+          const right = Math.floor((length - 3) / 2);
+          return text.slice(0, left) + "..." + text.slice(text.length - right);
+      }
+
+      function renderSources(container, sources) {
+          container.textContent = "";
+          if (sources.length == 0) {
+              return;
+          }
+          container.appendChild(document.createTextNode("\n---- References ----\n"));
+          container.appendChild(document.createElement("br"));
+          for (const url of sources) {
+              const a = document.createElement("a");
+              a.href = url;
+              a.target = "_blank";
+              a.rel = "noopener noreferrer";
+              a.textContent = shortenMiddle(url, 50);
+              container.appendChild(a);
+              container.appendChild(document.createElement("br"));
+          }
+      }
+
+      function collectWebSources(response) {
+          const urls = [];
+          const seen = new Set();
+          for (const item of response.output  ||  []) {
+              if (item.type == "web_search_call"  &&  Array.isArray(item.action?.sources)) {
+                  for (const source of item.action.sources) {
+                      if (source.url != null  &&  !seen.has(source.url)) {
+                          urls.push(source.url);
+                          seen.add(source.url);
+                      }
+                  }
+              }
+          }
+          return urls;
+      }
+
+      function renderGeneratedImage(container, dataUrl, imageId) {
+          const img = document.createElement("img");
+          img.src = dataUrl;
+          if (imageId != null) {
+              img.dataset.imageId = imageId;
+          }
+          container.appendChild(img);
+      }
+
+      function setPartialGeneratedImage(container, dataUrl) {
+          let img = container.querySelector("img[data-partial='true']");
+          if (img == null) {
+              img = document.createElement("img");
+              img.dataset.partial = "true";
+              container.appendChild(img);
+          }
+          img.src = dataUrl;
+      }
+
+      function clearGeneratedImagePartials(container) {
+          for (const img of container.querySelectorAll("img[data-partial='true']")) {
+              img.remove();
+          }
+      }
+
+      async function renderStoredImages(container, imageIds) {
+          for (const imageId of imageIds) {
+              const record = await loadGeneratedImage(imageId);
+              if (record != null) {
+                  renderGeneratedImage(container, record.dataUrl, imageId);
+              }
+          }
+      }
+
+      function isImageGenerationModel(modelName) {
+          return modelName.startsWith("gpt-image-");
+      }
+
+      async function generatedImagesAsInputContent(message) {
+          const content = [];
+          for (const imageId of Array.from(message.querySelectorAll(".generated-images img[data-image-id]")).map(x => x.dataset.imageId)) {
+              const record = await loadGeneratedImage(imageId);
+              if (record != null) {
+                  content.push({
+                      type: "input_image",
+                      image_url: record.dataUrl,
+                  });
+              }
+          }
+          return content;
+      }
+
+      function beginRequest(message) {
+          const controller = new AbortController();
+          const svg = message.querySelector("svg");
+          renderedReasoningItems = new Set();
+          setButtonToStop(svg);
+          activeRequest = {message: message, controller: controller};
+          return controller;
+      }
+
+      function getAttachmentRecords(message) {
+          return Array.from(message.querySelectorAll(".attachment-line")).map(line => ({
+              path: line.dataset.path,
+              file: attachedFiles.get(line.dataset.attachmentId)  ||  null,
+          }));
+      }
+
+      function addAttachment(message, file, path) {
+          attachmentCounter += 1;
+          const id = "attachment-" + attachmentCounter;
+          attachedFiles.set(id, file);
+          addAttachmentLine(message, path, id);
+      }
+
+      function getAttachmentPath(file, fileInput) {
+          return file.name;
+      }
+
+      function addAttachmentLine(message, path, attachmentId) {
+          const list = message.querySelector(".attachment-list");
+          const line = document.createElement("div");
+          line.className = "attachment-line";
+          line.dataset.path = path;
+          line.dataset.attachmentId = attachmentId;
+
+          const toggle = document.createElement("span");
+          toggle.className = "attachment-toggle";
+          toggle.textContent = "−";
+          toggle.addEventListener("click", () => {
+              attachedFiles.delete(attachmentId);
+              line.remove();
+          });
+          line.appendChild(toggle);
+          line.appendChild(document.createTextNode(path));
+          list.appendChild(line);
+      }
+
+      async function fileToDataUrl(file) {
+          return await new Promise((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () => resolve(reader.result);
+              reader.onerror = () => reject(reader.error  ||  new Error("Could not read file."));
+              reader.readAsDataURL(file);
+          });
+      }
+
+      function isImageFile(file) {
+          if (file.type  &&  file.type.startsWith("image/")) {
+              return true;
+          }
+          const name = file.name.toLowerCase();
+          return (
+              name.endsWith(".png")  ||
+              name.endsWith(".jpg")  ||
+              name.endsWith(".jpeg")  ||
+              name.endsWith(".gif")  ||
+              name.endsWith(".webp")  ||
+              name.endsWith(".heic")  ||
+              name.endsWith(".heif")
+          );
+      }
+
+      function buildImagePrompt(message) {
+          const parts = [];
+          const systemText = systemMessage.textContent.trim();
+          if (systemText != "") {
+              parts.push("System instructions:\n" + systemText);
+          }
+          const conversation = [];
+          for (const child of messages.children) {
+              const userText = child.querySelector(".user-message").textContent.trim();
+              const assistantText = child.querySelector(".ai-message").dataset.rawText  ||  "";
+              if (child == message) {
+                  if (userText != "") {
+                      conversation.push("User: " + userText);
+                  }
+                  break;
+              }
+              if (userText != "") {
+                  conversation.push("User: " + userText);
+              }
+              if (assistantText.trim() != "") {
+                  conversation.push("Assistant: " + assistantText.trim());
+              }
+          }
+          if (conversation.length != 0) {
+              parts.push("Conversation context:\n" + conversation.join("\n\n"));
+          }
+          parts.push("Generate one image that best satisfies the latest user request.");
+          return parts.join("\n\n");
+      }
+
+      async function generateImage(message) {
+          while (message.nextSibling) {
+              messages.removeChild(message.nextSibling);
+          }
+          const output = message.querySelector(".ai-message");
+          const sources = message.querySelector(".sources");
+          const images = message.querySelector(".generated-images");
+          setAiMessageText(output, "");
+          sources.textContent = "";
+          images.textContent = "";
+
+          localStorage.setItem(storageKey("history"), getHistory());
+
+          const body = {
+              model: model.value,
+              prompt: buildImagePrompt(message),
+          };
+          if (imageSize.value.trim() != "") {
+              body["size"] = imageSize.value.trim();
+          }
+          if (imageQuality.value.trim() != "") {
+              body["quality"] = imageQuality.value.trim();
+          }
+          if (imageFormat.value.trim() != "") {
+              body["output_format"] = imageFormat.value.trim();
+              if (imageFormat.value.trim() == "jpeg") {
+                  body["output_compression"] = 90;
+              }
+          }
+          if (imageModeration.value.trim() != "") {
+              body["moderation"] = imageModeration.value.trim();
+          }
+
+          const controller = beginRequest(message);
+
+          return fetch("https://api.openai.com/v1/images/generations", {
+              method: "POST",
+              headers: {
+                  "Content-Type": "application/json",
+                  "Authorization": "Bearer " + key.value,
+              },
+              signal: controller.signal,
+              body: JSON.stringify(body),
+
+          }).then(async response => {
+              if (!response.ok) {
+                  let message = `HTML response is ${response.status}.`;
+                  try {
+                      const errorBody = await response.json();
+                      message = errorBody.error?.message  ||  message;
+                  }
+                  catch (error) {
+                  }
+                  throw new Error(message);
+              }
+
+              const json = await response.json();
+              const format = body["output_format"]  ||  "png";
+              const b64 = json.data?.[0]?.b64_json;
+              if (!b64) {
+                  throw new Error("No image data returned.");
+              }
+              const dataUrl = `data:image/${format};base64,${b64}`;
+              const imageId = await saveGeneratedImage(dataUrl);
+              renderGeneratedImage(images, dataUrl, imageId);
+
+              finishRequest(message, true);
+
+          }).catch(error => {
+              if (error.name == "AbortError") {
+                  finishRequest(message, true);
+              }
+              else {
+                  setAiMessageText(output, `[${error.toString()}]`);
+                  finishRequest(message, false);
+              }
+          });
+      }
+
+      async function send(message) {
+          if (activeRequest != null) {
+              return;
+          }
+          if (!model.value  ||  !key.value) {
+              return;
+          }
+          if (isImageGenerationModel(model.value)) {
+              return await generateImage(message);
+          }
+          if (!temp.value) {
+              return;
+          }
+          const temperature = Number(temp.value);
+          if (temperature < 0  ||  temperature > 2) {
+              return;
+          }
+
+          while (message.nextSibling) {
+              messages.removeChild(message.nextSibling);
+          }
+          const output = message.querySelector(".ai-message");
+          const sources = message.querySelector(".sources");
+          const images = message.querySelector(".generated-images");
+          setAiMessageText(output, "");
+          sources.textContent = "";
+          images.textContent = "";
+
+          localStorage.setItem(storageKey("history"), getHistory());
+
+          let listOfMessages = [{role: "system", content: systemMessage.textContent}];
+          for (let child of messages.children) {
+              const userText = child.querySelector(".user-message").textContent;
+              const assistantText = child.querySelector(".ai-message").dataset.rawText  ||  "";
+              const attachments = getAttachmentRecords(child);
+              const generatedImages = await generatedImagesAsInputContent(child);
+              if (userText.trim() != ""  ||  attachments.length != 0) {
+                  if (attachments.length == 0) {
+                      if (generatedImages.length == 0) {
+                          listOfMessages.push({role: "user", content: userText});
+                      }
+                      else {
+                          const content = generatedImages.slice();
+                          if (userText != "") {
+                              content.push({type: "input_text", text: userText});
+                          }
+                          listOfMessages.push({role: "user", content: content});
+                      }
+                  }
+                  else {
+                      const content = generatedImages.slice();
+                      for (const attachment of attachments) {
+                          if (attachment.file == null) {
+                              throw new Error(`Attachment unavailable: ${attachment.path}. Reattach the file.`);
+                          }
+                          const dataUrl = await fileToDataUrl(attachment.file);
+                          if (isImageFile(attachment.file)) {
+                              content.push({
+                                  type: "input_image",
+                                  image_url: dataUrl,
+                              });
+                          }
+                          else {
+                              content.push({
+                                  type: "input_file",
+                                  filename: attachment.file.name,
+                                  file_data: dataUrl,
+                              });
+                          }
+                      }
+                      if (userText != "") {
+                          content.push({type: "input_text", text: userText});
+                      }
+                      listOfMessages.push({role: "user", content: content});
+                  }
+              }
+              else if (generatedImages.length != 0) {
+                  listOfMessages.push({role: "user", content: generatedImages});
+              }
+              if (assistantText.trim() != "") {
+                  listOfMessages.push({role: "assistant", content: assistantText});
+              }
+          }
+
+          let body = {
+              model: model.value,
+              temperature: temperature,
+              input: listOfMessages,
+              store: false,
+              stream: true,
+          };
+          const effort = reasoningEffort.value.trim();
+          if (effort != ""  &&  !model.value.startsWith("gpt-4.1")) {
+              body["reasoning"] = {
+                  effort: effort,
+                  summary: "concise",
+              };
+          }
+          if (webSearch.checked) {
+              body["tools"] = [{type: "web_search"}];
+              body["tool_choice"] = "auto";
+              body["include"] = ["web_search_call.action.sources"];
+          }
+
+          const controller = beginRequest(message);
+
+          fetch("https://api.openai.com/v1/responses", {
+              method: "POST",
+              headers: {
+                  "Content-Type": "application/json",
+                  "Authorization": "Bearer " + key.value,
+              },
+              signal: controller.signal,
+              body: JSON.stringify(body),
+
+          }).then(async response => {
+              if (!response.ok) {
+                  let message = `HTML response is ${response.status}.`;
+                  try {
+                      const errorBody = await response.json();
+                      message = errorBody.error?.message  ||  message;
+                  }
+                  catch (error) {
+                  }
+                  throw new Error(message);
+              }
+
+              const reader = response.body.getReader();
+              const decoder = new TextDecoder("utf-8");
+              let done = false;
+              let buffer = "";
+
+              while (!done) {
+                  const { value, done: readerDone } = await reader.read();
+                  done = readerDone;
+                  if (done) {
+                      break;
+                  }
+
+                  buffer += decoder.decode(value, { stream: true });
+
+                  let index;
+                  while ((index = buffer.indexOf("\n")) !== -1) {
+                      const line = buffer.slice(0, index).trim();
+                      buffer = buffer.slice(index + 1);
+                      if (line === ""  ||  !line.startsWith("data:")) {
+                          continue;
+                      }
+
+                      const data = line.slice(5).trim();
+                      if (data === "[DONE]") {
+                          done = true;
+                          break;
+                      }
+
+                      try {
+                          const json = JSON.parse(data);
+                          if (json.type == "response.output_text.delta") {
+                              appendAiMessageText(output, json.delta  ||  "");
+                          }
+                          else if (json.type == "response.output_item.done") {
+                              appendReasoningSummary(output, json.item);
+                          }
+                          else if (json.type == "response.completed") {
+                              if (Array.isArray(json.response?.output)) {
+                                  for (const item of json.response.output) {
+                                      appendReasoningSummary(output, item);
+                                  }
+                              }
+                              renderSources(sources, collectWebSources(json.response  ||  {}));
+                          }
+                          else if (json.type == "error") {
+                              throw new Error(json.error?.message  ||  "Streaming error.");
+                          }
+                      }
+                      catch (error) {
+                          throw new Error(`${error.toString()} in chunk:\n\n${data}`);
+                      }
+                  }
+              }
+
+              finishRequest(message, true);
+
+          }).catch(error => {
+              if (error.name == "AbortError") {
+                  finishRequest(message, true);
+              }
+              else {
+                  setAiMessageText(output, `[${error.toString()}]`);
+                  finishRequest(message, false);
+              }
+          });
+      }
+
+      let messages = document.getElementById("messages");
+      let systemMessage = document.getElementById("system-message");
+      let model = document.getElementById("model");
+      let modelMenu = document.getElementById("model-menu");
+      let reasoningEffort = document.getElementById("reasoning-effort");
+      let reasoningMenu = document.getElementById("reasoning-menu");
+      let temp = document.getElementById("temp");
+      let key = document.getElementById("key");
+      let webSearch = document.getElementById("web-search");
+      let imageSize = document.getElementById("image-size");
+      let imageSizeMenu = document.getElementById("image-size-menu");
+      let imageQuality = document.getElementById("image-quality");
+      let imageQualityMenu = document.getElementById("image-quality-menu");
+      let imageFormat = document.getElementById("image-format");
+      let imageFormatMenu = document.getElementById("image-format-menu");
+      let imageModeration = document.getElementById("image-moderation");
+      let imageModerationMenu = document.getElementById("image-moderation-menu");
+      let activeRequest = null;
+      let renderedReasoningItems = new Set();
+      let attachedFiles = new Map();
+      let attachmentCounter = 0;
+      let generatedImageCounter = 0;
+      let generatedImagesDbPromise = openGeneratedImagesDb();
+      const sendButtonShape = `
+    <g class="send-shape" transform="translate(-38.425328,-84.136154)">
+      <path style="fill:#ffff00;stroke:#ffff00;stroke-width:10;stroke-linejoin:round;" d="M 52.567223,151.75928 43.425096,190.61331 144.44559,139.87452 43.425096,89.135727 l 9.142127,38.854033 91.878367,11.88476 z"/>
+    </g>
+`;
+      const stopButtonShape = `
+    <circle class="stop-shape" cx="55.509825" cy="55.738365" r="34" style="display:none;fill:#ffff00;stroke:#ffff00;stroke-width:10;stroke-linejoin:round;"/>
+`;
+
+      const newMessageAsHTML = `
+<div class="message">
+  <div class="user-message" contenteditable="plaintext-only"></div>
+  <svg viewBox="0 0 111.01965 111.47673" width="2em">
+${sendButtonShape}
+${stopButtonShape}
+  </svg>
+  <div class="attachment-controls">
+    <div class="attachment-list"></div>
+    <div><span class="attachment-toggle attachment-add">+</span></div>
+    <input class="attachment-input" type="file" multiple style="display:none;">
+  </div>
+  <pre class="ai-message"></pre>
+  <div class="sources"></div>
+  <div class="generated-images"></div>
+</div>
+`;
+
+      setupChoiceMenu(model, modelMenu, "model");
+      setupChoiceMenu(reasoningEffort, reasoningMenu, "reasoning-effort");
+      setupChoiceMenu(imageSize, imageSizeMenu, "image-size");
+      setupChoiceMenu(imageQuality, imageQualityMenu, "image-quality");
+      setupChoiceMenu(imageFormat, imageFormatMenu, "image-format");
+      setupChoiceMenu(imageModeration, imageModerationMenu, "image-moderation");
+
+      (async () => {
+          const history = localStorage.getItem(storageKey("history"))  ||  "";
+          if (history == "") {
+              newUserMessage();
+          }
+          else {
+              for (const message of Object.values(JSON.parse(history))) {
+                  if (message.user != ""  ||  (Array.isArray(message.generatedImages)  &&  message.generatedImages.length != 0)) {
+                      newUserMessage();
+                      const last = messages.lastElementChild;
+                      last.querySelector(".user-message").innerText = message.user;
+                      if (message.assistant != "") {
+                          setAiMessageText(last.querySelector(".ai-message"), message.assistant);
+                      }
+                      else if (!Array.isArray(message.generatedImages)  ||  message.generatedImages.length == 0) {
+                          setAiMessageText(last.querySelector(".ai-message"), "[No saved response.]");
+                      }
+                      if (Array.isArray(message.attachments)) {
+                          for (const path of message.attachments) {
+                              attachmentCounter += 1;
+                              addAttachmentLine(last, path, "attachment-" + attachmentCounter);
+                          }
+                      }
+                      if (Array.isArray(message.sources)) {
+                          renderSources(last.querySelector(".sources"), message.sources);
+                      }
+                      if (Array.isArray(message.generatedImages)) {
+                          await renderStoredImages(last.querySelector(".generated-images"), message.generatedImages);
+                      }
+                  }
+              }
+              newUserMessage();
+          }
+      })();
+
+    </script>
+  </body>
+</html>
