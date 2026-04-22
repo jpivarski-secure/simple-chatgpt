@@ -60,12 +60,12 @@
           margin-bottom: 4px;
       }
 
-      #reasoning-wrapper {
+      .menu-wrapper {
           position: relative;
           display: inline-block;
       }
 
-      #reasoning-menu {
+      .choice-menu {
           position: absolute;
           top: calc(100% + 2px);
           left: 0;
@@ -76,12 +76,12 @@
           z-index: 10;
       }
 
-      .reasoning-option {
+      .choice-option {
           padding: 4px 8px;
           border-bottom: 1px solid #808000;
       }
 
-      .reasoning-option:last-child {
+      .choice-option:last-child {
           border-bottom: 0;
       }
 
@@ -146,6 +146,12 @@
           margin-top: 4px;
       }
 
+      .generated-images img {
+          display: block;
+          width: 100%;
+          margin-top: 4px;
+      }
+
     </style>
   </head>
   <body>
@@ -159,16 +165,22 @@
 
     <div id="controls">
       <div class="controls-row">
-        <input id="model" size="8" type="input" placeholder="Model...">
-        <span id="reasoning-wrapper">
+        <span class="menu-wrapper">
+          <input id="model" size="8" type="input" placeholder="Model...">
+          <div id="model-menu" class="choice-menu">
+            <div class="choice-option">gpt-5.4</div>
+            <div class="choice-option">gpt-image-2</div>
+          </div>
+        </span>
+        <span class="menu-wrapper">
           <input id="reasoning-effort" size="6" type="input" placeholder="Reason...">
-          <div id="reasoning-menu">
-            <div class="reasoning-option">none</div>
-            <div class="reasoning-option">minimal</div>
-            <div class="reasoning-option">low</div>
-            <div class="reasoning-option">medium</div>
-            <div class="reasoning-option">high</div>
-            <div class="reasoning-option">xhigh</div>
+          <div id="reasoning-menu" class="choice-menu">
+            <div class="choice-option">none</div>
+            <div class="choice-option">minimal</div>
+            <div class="choice-option">low</div>
+            <div class="choice-option">medium</div>
+            <div class="choice-option">high</div>
+            <div class="choice-option">xhigh</div>
           </div>
         </span>
         <input id="temp" size="4" type="input" placeholder="Temp...">
@@ -176,6 +188,40 @@
       </div>
       <div class="controls-row">
         <label><input id="web-search" type="checkbox"> web</label>
+        <span class="menu-wrapper">
+          <input id="image-size" size="10" type="input" placeholder="Size...">
+          <div id="image-size-menu" class="choice-menu">
+            <div class="choice-option">1024x1024</div>
+            <div class="choice-option">1536x1024</div>
+            <div class="choice-option">1024x1536</div>
+            <div class="choice-option">2048x2048</div>
+            <div class="choice-option">2048x1152</div>
+            <div class="choice-option">3840x2160</div>
+            <div class="choice-option">2160x3840</div>
+          </div>
+        </span>
+        <span class="menu-wrapper">
+          <input id="image-quality" size="6" type="input" placeholder="Qual...">
+          <div id="image-quality-menu" class="choice-menu">
+            <div class="choice-option">low</div>
+            <div class="choice-option">medium</div>
+            <div class="choice-option">high</div>
+          </div>
+        </span>
+        <span class="menu-wrapper">
+          <input id="image-format" size="6" type="input" placeholder="Fmt...">
+          <div id="image-format-menu" class="choice-menu">
+            <div class="choice-option">png</div>
+            <div class="choice-option">jpeg</div>
+          </div>
+        </span>
+        <span class="menu-wrapper">
+          <input id="image-moderation" size="6" type="input" placeholder="Mod...">
+          <div id="image-moderation-menu" class="choice-menu">
+            <div class="choice-option">auto</div>
+            <div class="choice-option">low</div>
+          </div>
+        </span>
       </div>
     </div>
 
@@ -199,6 +245,10 @@
       syncInputToLocalStorage("reasoning-effort");
       syncInputToLocalStorage("temp");
       syncInputToLocalStorage("key");
+      syncInputToLocalStorage("image-size");
+      syncInputToLocalStorage("image-quality");
+      syncInputToLocalStorage("image-format");
+      syncInputToLocalStorage("image-moderation");
       syncCheckboxToLocalStorage("web-search");
 
       document.getElementById("clear-all").addEventListener("click", () => {
@@ -207,6 +257,7 @@
               activeRequest = null;
           }
           attachedFiles.clear();
+          clearGeneratedImages().catch(() => {});
           while (messages.firstChild) {
               messages.removeChild(messages.firstChild);
           }
@@ -220,6 +271,7 @@
               assistant: message.querySelector(".ai-message").dataset.rawText  ||  "",
               sources: Array.from(message.querySelectorAll(".sources a")).map(x => x.href),
               attachments: Array.from(message.querySelectorAll(".attachment-line")).map(x => x.dataset.path),
+              generatedImages: Array.from(message.querySelectorAll(".generated-images img[data-image-id]")).map(x => x.dataset.imageId),
           })));
       }
 
@@ -227,6 +279,55 @@
           const element = document.getElementById(id);
           element.checked = localStorage.getItem(id) == "true";
           element.addEventListener("change", () => { localStorage.setItem(id, element.checked); });
+      }
+
+      function openGeneratedImagesDb() {
+          return new Promise((resolve, reject) => {
+              const request = indexedDB.open("simple-chatgpt-images", 1);
+              request.onupgradeneeded = () => {
+                  request.result.createObjectStore("images", {keyPath: "id"});
+              };
+              request.onsuccess = () => resolve(request.result);
+              request.onerror = () => reject(request.error);
+          });
+      }
+
+      async function withImageStore(mode, callback) {
+          const db = await generatedImagesDbPromise;
+          return await new Promise((resolve, reject) => {
+              const transaction = db.transaction("images", mode);
+              const store = transaction.objectStore("images");
+              const result = callback(store);
+              transaction.oncomplete = () => resolve(result);
+              transaction.onerror = () => reject(transaction.error);
+              transaction.onabort = () => reject(transaction.error);
+          });
+      }
+
+      async function saveGeneratedImage(dataUrl) {
+          generatedImageCounter += 1;
+          const id = "generated-image-" + Date.now() + "-" + generatedImageCounter;
+          await withImageStore("readwrite", store => {
+              store.put({id: id, dataUrl: dataUrl});
+          });
+          return id;
+      }
+
+      async function loadGeneratedImage(id) {
+          const db = await generatedImagesDbPromise;
+          return await new Promise((resolve, reject) => {
+              const transaction = db.transaction("images", "readonly");
+              const store = transaction.objectStore("images");
+              const request = store.get(id);
+              request.onsuccess = () => resolve(request.result  ||  null);
+              request.onerror = () => reject(request.error);
+          });
+      }
+
+      async function clearGeneratedImages() {
+          await withImageStore("readwrite", store => {
+              store.clear();
+          });
       }
 
       function newUserMessage() {
@@ -286,12 +387,30 @@
           }
       }
 
-      function showReasoningMenu() {
-          reasoningMenu.style.display = "block";
+      function showMenu(menu) {
+          menu.style.display = "block";
       }
 
-      function hideReasoningMenu() {
-          reasoningMenu.style.display = "none";
+      function hideMenu(menu) {
+          menu.style.display = "none";
+      }
+
+      function setupChoiceMenu(input, menu, storageKey) {
+          input.addEventListener("focus", () => showMenu(menu));
+          input.addEventListener("click", () => showMenu(menu));
+          input.addEventListener("input", () => showMenu(menu));
+          input.addEventListener("blur", () => {
+              setTimeout(() => hideMenu(menu), 100);
+          });
+          for (const option of menu.children) {
+              option.addEventListener("mousedown", event => {
+                  event.preventDefault();
+                  input.value = option.textContent;
+                  localStorage.setItem(storageKey, input.value);
+                  hideMenu(menu);
+                  input.blur();
+              });
+          });
       }
 
       function appendReasoningSummary(output, item) {
@@ -389,6 +508,53 @@
           return urls;
       }
 
+      function renderGeneratedImage(container, dataUrl, imageId) {
+          const img = document.createElement("img");
+          img.src = dataUrl;
+          if (imageId != null) {
+              img.dataset.imageId = imageId;
+          }
+          container.appendChild(img);
+      }
+
+      function setPartialGeneratedImage(container, dataUrl) {
+          let img = container.querySelector("img[data-partial='true']");
+          if (img == null) {
+              img = document.createElement("img");
+              img.dataset.partial = "true";
+              container.appendChild(img);
+          }
+          img.src = dataUrl;
+      }
+
+      function clearGeneratedImagePartials(container) {
+          for (const img of container.querySelectorAll("img[data-partial='true']")) {
+              img.remove();
+          }
+      }
+
+      async function renderStoredImages(container, imageIds) {
+          for (const imageId of imageIds) {
+              const record = await loadGeneratedImage(imageId);
+              if (record != null) {
+                  renderGeneratedImage(container, record.dataUrl, imageId);
+              }
+          }
+      }
+
+      function isImageGenerationModel(modelName) {
+          return modelName.startsWith("gpt-image-");
+      }
+
+      function beginRequest(message) {
+          const controller = new AbortController();
+          const svg = message.querySelector("svg");
+          renderedReasoningItems = new Set();
+          setButtonToStop(svg);
+          activeRequest = {message: message, controller: controller};
+          return controller;
+      }
+
       function getAttachmentRecords(message) {
           return Array.from(message.querySelectorAll(".attachment-line")).map(line => ({
               path: line.dataset.path,
@@ -451,11 +617,167 @@
           );
       }
 
+      function buildImagePrompt(message) {
+          const parts = [];
+          const systemText = systemMessage.textContent.trim();
+          if (systemText != "") {
+              parts.push("System instructions:\n" + systemText);
+          }
+          const conversation = [];
+          for (const child of messages.children) {
+              const userText = child.querySelector(".user-message").textContent.trim();
+              const assistantText = child.querySelector(".ai-message").dataset.rawText  ||  "";
+              if (child == message) {
+                  if (userText != "") {
+                      conversation.push("User: " + userText);
+                  }
+                  break;
+              }
+              if (userText != "") {
+                  conversation.push("User: " + userText);
+              }
+              if (assistantText.trim() != "") {
+                  conversation.push("Assistant: " + assistantText.trim());
+              }
+          }
+          if (conversation.length != 0) {
+              parts.push("Conversation context:\n" + conversation.join("\n\n"));
+          }
+          parts.push("Generate one image that best satisfies the latest user request.");
+          return parts.join("\n\n");
+      }
+
+      async function generateImage(message) {
+          const output = message.querySelector(".ai-message");
+          const sources = message.querySelector(".sources");
+          const images = message.querySelector(".generated-images");
+          setAiMessageText(output, "");
+          sources.textContent = "";
+          images.textContent = "";
+
+          localStorage.setItem("history", getHistory());
+
+          const body = {
+              model: model.value,
+              prompt: buildImagePrompt(message),
+              stream: true,
+              partial_images: 2,
+          };
+          if (imageSize.value.trim() != "") {
+              body["size"] = imageSize.value.trim();
+          }
+          if (imageQuality.value.trim() != "") {
+              body["quality"] = imageQuality.value.trim();
+          }
+          if (imageFormat.value.trim() != "") {
+              body["output_format"] = imageFormat.value.trim();
+              if (imageFormat.value.trim() == "jpeg") {
+                  body["output_compression"] = 90;
+              }
+          }
+          if (imageModeration.value.trim() != "") {
+              body["moderation"] = imageModeration.value.trim();
+          }
+
+          const controller = beginRequest(message);
+
+          return fetch("https://api.openai.com/v1/images/generations", {
+              method: "POST",
+              headers: {
+                  "Content-Type": "application/json",
+                  "Authorization": "Bearer " + key.value,
+              },
+              signal: controller.signal,
+              body: JSON.stringify(body),
+
+          }).then(async response => {
+              if (!response.ok) {
+                  let message = `HTML response is ${response.status}.`;
+                  try {
+                      const errorBody = await response.json();
+                      message = errorBody.error?.message  ||  message;
+                  }
+                  catch (error) {
+                  }
+                  throw new Error(message);
+              }
+
+              const reader = response.body.getReader();
+              const decoder = new TextDecoder("utf-8");
+              let done = false;
+              let buffer = "";
+
+              while (!done) {
+                  const { value, done: readerDone } = await reader.read();
+                  done = readerDone;
+                  if (done) {
+                      break;
+                  }
+
+                  buffer += decoder.decode(value, { stream: true });
+
+                  let index;
+                  while ((index = buffer.indexOf("\n")) !== -1) {
+                      const line = buffer.slice(0, index).trim();
+                      buffer = buffer.slice(index + 1);
+                      if (line === ""  ||  !line.startsWith("data:")) {
+                          continue;
+                      }
+
+                      const data = line.slice(5).trim();
+                      if (data === "[DONE]") {
+                          done = true;
+                          break;
+                      }
+
+                      try {
+                          const json = JSON.parse(data);
+                          if (json.type == "image_generation.partial_image") {
+                              const format = body["output_format"]  ||  "png";
+                              setPartialGeneratedImage(images, `data:image/${format};base64,${json.b64_json}`);
+                          }
+                          else if (json.type == "image_generation.completed") {
+                              clearGeneratedImagePartials(images);
+                              const format = body["output_format"]  ||  "png";
+                              const imageId = await saveGeneratedImage(`data:image/${format};base64,${json.b64_json}`);
+                              renderGeneratedImage(images, `data:image/${format};base64,${json.b64_json}`, imageId);
+                              localStorage.setItem("history", getHistory());
+                          }
+                          else if (json.type == "error") {
+                              throw new Error(json.error?.message  ||  "Streaming error.");
+                          }
+                      }
+                      catch (error) {
+                          throw new Error(`${error.toString()} in chunk:\n\n${data}`);
+                      }
+                  }
+              }
+
+              finishRequest(message, true);
+
+          }).catch(error => {
+              if (error.name == "AbortError") {
+                  clearGeneratedImagePartials(images);
+                  finishRequest(message, true);
+              }
+              else {
+                  setAiMessageText(output, `[${error.toString()}]`);
+                  finishRequest(message, false);
+              }
+          });
+      }
+
       async function send(message) {
           if (activeRequest != null) {
               return;
           }
-          if (!model.value  ||  !temp.value  ||  !key.value) {
+          if (!model.value  ||  !key.value) {
+              return;
+          }
+          if (isImageGenerationModel(model.value)) {
+              return await generateImage(message);
+          }
+          if (!temp.value) {
               return;
           }
           const temperature = Number(temp.value);
@@ -534,11 +856,7 @@
               body["include"] = ["web_search_call.action.sources"];
           }
 
-          const controller = new AbortController();
-          const svg = message.querySelector("svg");
-          renderedReasoningItems = new Set();
-          setButtonToStop(svg);
-          activeRequest = {message: message, controller: controller};
+          const controller = beginRequest(message);
 
           fetch("https://api.openai.com/v1/responses", {
               method: "POST",
@@ -631,15 +949,26 @@
       let messages = document.getElementById("messages");
       let systemMessage = document.getElementById("system-message");
       let model = document.getElementById("model");
+      let modelMenu = document.getElementById("model-menu");
       let reasoningEffort = document.getElementById("reasoning-effort");
       let reasoningMenu = document.getElementById("reasoning-menu");
       let temp = document.getElementById("temp");
       let key = document.getElementById("key");
       let webSearch = document.getElementById("web-search");
+      let imageSize = document.getElementById("image-size");
+      let imageSizeMenu = document.getElementById("image-size-menu");
+      let imageQuality = document.getElementById("image-quality");
+      let imageQualityMenu = document.getElementById("image-quality-menu");
+      let imageFormat = document.getElementById("image-format");
+      let imageFormatMenu = document.getElementById("image-format-menu");
+      let imageModeration = document.getElementById("image-moderation");
+      let imageModerationMenu = document.getElementById("image-moderation-menu");
       let activeRequest = null;
       let renderedReasoningItems = new Set();
       let attachedFiles = new Map();
       let attachmentCounter = 0;
+      let generatedImageCounter = 0;
+      let generatedImagesDbPromise = openGeneratedImagesDb();
       const sendButtonShape = `
     <g class="send-shape" transform="translate(-38.425328,-84.136154)">
       <path style="fill:#ffff00;stroke:#ffff00;stroke-width:10;stroke-linejoin:round;" d="M 52.567223,151.75928 43.425096,190.61331 144.44559,139.87452 43.425096,89.135727 l 9.142127,38.854033 91.878367,11.88476 z"/>
@@ -663,54 +992,51 @@ ${stopButtonShape}
   </div>
   <pre class="ai-message"></pre>
   <div class="sources"></div>
+  <div class="generated-images"></div>
 </div>
 `;
 
-      reasoningEffort.addEventListener("focus", showReasoningMenu);
-      reasoningEffort.addEventListener("click", showReasoningMenu);
-      reasoningEffort.addEventListener("input", showReasoningMenu);
-      reasoningEffort.addEventListener("blur", () => {
-          setTimeout(hideReasoningMenu, 100);
-      });
-      for (const option of reasoningMenu.children) {
-          option.addEventListener("mousedown", event => {
-              event.preventDefault();
-              reasoningEffort.value = option.textContent;
-              localStorage.setItem("reasoning-effort", reasoningEffort.value);
-              hideReasoningMenu();
-              reasoningEffort.blur();
-          });
-      }
+      setupChoiceMenu(model, modelMenu, "model");
+      setupChoiceMenu(reasoningEffort, reasoningMenu, "reasoning-effort");
+      setupChoiceMenu(imageSize, imageSizeMenu, "image-size");
+      setupChoiceMenu(imageQuality, imageQualityMenu, "image-quality");
+      setupChoiceMenu(imageFormat, imageFormatMenu, "image-format");
+      setupChoiceMenu(imageModeration, imageModerationMenu, "image-moderation");
 
-      const history = localStorage.getItem("history")  ||  "";
-      if (history == "") {
-          newUserMessage();
-      }
-      else {
-          for (const message of Object.values(JSON.parse(history))) {
-              if (message.user != "") {
-                  newUserMessage();
-                  const last = messages.lastElementChild;
-                  last.querySelector(".user-message").innerText = message.user;
-                  if (message.assistant == "") {
-                      setAiMessageText(last.querySelector(".ai-message"), "[No saved response.]");
-                  }
-                  else {
-                      setAiMessageText(last.querySelector(".ai-message"), message.assistant);
-                  }
-                  if (Array.isArray(message.attachments)) {
-                      for (const path of message.attachments) {
-                          attachmentCounter += 1;
-                          addAttachmentLine(last, path, "attachment-" + attachmentCounter);
+      (async () => {
+          const history = localStorage.getItem("history")  ||  "";
+          if (history == "") {
+              newUserMessage();
+          }
+          else {
+              for (const message of Object.values(JSON.parse(history))) {
+                  if (message.user != ""  ||  (Array.isArray(message.generatedImages)  &&  message.generatedImages.length != 0)) {
+                      newUserMessage();
+                      const last = messages.lastElementChild;
+                      last.querySelector(".user-message").innerText = message.user;
+                      if (message.assistant != "") {
+                          setAiMessageText(last.querySelector(".ai-message"), message.assistant);
+                      }
+                      else if (!Array.isArray(message.generatedImages)  ||  message.generatedImages.length == 0) {
+                          setAiMessageText(last.querySelector(".ai-message"), "[No saved response.]");
+                      }
+                      if (Array.isArray(message.attachments)) {
+                          for (const path of message.attachments) {
+                              attachmentCounter += 1;
+                              addAttachmentLine(last, path, "attachment-" + attachmentCounter);
+                          }
+                      }
+                      if (Array.isArray(message.sources)) {
+                          renderSources(last.querySelector(".sources"), message.sources);
+                      }
+                      if (Array.isArray(message.generatedImages)) {
+                          await renderStoredImages(last.querySelector(".generated-images"), message.generatedImages);
                       }
                   }
-                  if (Array.isArray(message.sources)) {
-                      renderSources(last.querySelector(".sources"), message.sources);
-                  }
               }
+              newUserMessage();
           }
-          newUserMessage();
-      }
+      })();
 
     </script>
   </body>
