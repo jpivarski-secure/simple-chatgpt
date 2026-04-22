@@ -37,6 +37,22 @@
           line-height: 1.2;
       }
 
+      label {
+          color: #ffff00;
+      }
+
+      a {
+          color: #ffff00;
+      }
+
+      #controls {
+          margin-bottom: 6px;
+      }
+
+      .controls-row {
+          margin-bottom: 4px;
+      }
+
       #reasoning-wrapper {
           position: relative;
           display: inline-block;
@@ -101,6 +117,10 @@
           line-height: 1.2;
       }
 
+      .sources {
+          margin-top: 4px;
+      }
+
     </style>
   </head>
   <body>
@@ -113,20 +133,25 @@
     </details>
 
     <div id="controls">
-      <input id="model" size="8" type="input" placeholder="Model...">
-      <span id="reasoning-wrapper">
-        <input id="reasoning-effort" size="6" type="input" placeholder="Reason...">
-        <div id="reasoning-menu">
-          <div class="reasoning-option">none</div>
-          <div class="reasoning-option">minimal</div>
-          <div class="reasoning-option">low</div>
-          <div class="reasoning-option">medium</div>
-          <div class="reasoning-option">high</div>
-          <div class="reasoning-option">xhigh</div>
-        </div>
-      </span>
-      <input id="temp" size="4" type="input" placeholder="Temp...">
-      <input id="key" size="4" type="password" placeholder="API key...">
+      <div class="controls-row">
+        <input id="model" size="8" type="input" placeholder="Model...">
+        <span id="reasoning-wrapper">
+          <input id="reasoning-effort" size="6" type="input" placeholder="Reason...">
+          <div id="reasoning-menu">
+            <div class="reasoning-option">none</div>
+            <div class="reasoning-option">minimal</div>
+            <div class="reasoning-option">low</div>
+            <div class="reasoning-option">medium</div>
+            <div class="reasoning-option">high</div>
+            <div class="reasoning-option">xhigh</div>
+          </div>
+        </span>
+        <input id="temp" size="4" type="input" placeholder="Temp...">
+        <input id="key" size="4" type="password" placeholder="API key...">
+      </div>
+      <div class="controls-row">
+        <label><input id="web-search" type="checkbox"> web</label>
+      </div>
     </div>
 
     <div id="messages"></div>
@@ -149,6 +174,7 @@
       syncInputToLocalStorage("reasoning-effort");
       syncInputToLocalStorage("temp");
       syncInputToLocalStorage("key");
+      syncCheckboxToLocalStorage("web-search");
 
       document.getElementById("clear-all").addEventListener("click", () => {
           if (activeRequest != null) {
@@ -164,9 +190,16 @@
 
       function getHistory() {
           return JSON.stringify(Array.from(messages.children).map(message => ({
-              user: message.firstElementChild.innerText,
-              assistant: message.lastElementChild.innerText,
+              user: message.querySelector(".user-message").innerText,
+              assistant: message.querySelector(".ai-message").innerText,
+              sources: Array.from(message.querySelectorAll(".sources a")).map(x => x.href),
           })));
+      }
+
+      function syncCheckboxToLocalStorage(id) {
+          const element = document.getElementById(id);
+          element.checked = localStorage.getItem(id) == "true";
+          element.addEventListener("change", () => { localStorage.setItem(id, element.checked); });
       }
 
       function newUserMessage() {
@@ -244,6 +277,47 @@
           }
       }
 
+      function shortenMiddle(text, length) {
+          if (text.length <= length) {
+              return text;
+          }
+          const left = Math.ceil((length - 3) / 2);
+          const right = Math.floor((length - 3) / 2);
+          return text.slice(0, left) + "..." + text.slice(text.length - right);
+      }
+
+      function renderSources(container, sources) {
+          container.textContent = "";
+          if (sources.length == 0) {
+              return;
+          }
+          for (const url of sources) {
+              const a = document.createElement("a");
+              a.href = url;
+              a.target = "_blank";
+              a.rel = "noopener noreferrer";
+              a.textContent = shortenMiddle(url, 50);
+              container.appendChild(a);
+              container.appendChild(document.createElement("br"));
+          }
+      }
+
+      function collectWebSources(response) {
+          const urls = [];
+          const seen = new Set();
+          for (const item of response.output  ||  []) {
+              if (item.type == "web_search_call"  &&  Array.isArray(item.action?.sources)) {
+                  for (const source of item.action.sources) {
+                      if (source.url != null  &&  !seen.has(source.url)) {
+                          urls.push(source.url);
+                          seen.add(source.url);
+                      }
+                  }
+              }
+          }
+          return urls;
+      }
+
       function send(message) {
           if (activeRequest != null) {
               return;
@@ -259,18 +333,22 @@
           while (message.nextSibling) {
               messages.removeChild(message.nextSibling);
           }
-          const output = message.lastElementChild;
+          const output = message.querySelector(".ai-message");
+          const sources = message.querySelector(".sources");
           output.textContent = "";
+          sources.textContent = "";
 
           localStorage.setItem("history", getHistory());
 
           let listOfMessages = [{role: "system", content: systemMessage.textContent}];
           for (let child of messages.children) {
-              if (child.firstElementChild.textContent.trim() != "") {
-                  listOfMessages.push({role: "user", content: child.firstElementChild.textContent});
+              const userText = child.querySelector(".user-message").textContent;
+              const assistantText = child.querySelector(".ai-message").textContent;
+              if (userText.trim() != "") {
+                  listOfMessages.push({role: "user", content: userText});
               }
-              if (child.lastElementChild.textContent.trim() != "") {
-                  listOfMessages.push({role: "assistant", content: child.lastElementChild.textContent});
+              if (assistantText.trim() != "") {
+                  listOfMessages.push({role: "assistant", content: assistantText});
               }
           }
 
@@ -287,6 +365,11 @@
                   effort: effort,
                   summary: "concise",
               };
+          }
+          if (webSearch.checked) {
+              body["tools"] = [{type: "web_search"}];
+              body["tool_choice"] = "auto";
+              body["include"] = ["web_search_call.action.sources"];
           }
 
           const controller = new AbortController();
@@ -358,6 +441,7 @@
                                       appendReasoningSummary(output, item);
                                   }
                               }
+                              renderSources(sources, collectWebSources(json.response  ||  {}));
                           }
                           else if (json.type == "error") {
                               throw new Error(json.error?.message  ||  "Streaming error.");
@@ -389,6 +473,7 @@
       let reasoningMenu = document.getElementById("reasoning-menu");
       let temp = document.getElementById("temp");
       let key = document.getElementById("key");
+      let webSearch = document.getElementById("web-search");
       let activeRequest = null;
       let renderedReasoningItems = new Set();
       const sendButtonShape = `
@@ -408,6 +493,7 @@ ${sendButtonShape}
 ${stopButtonShape}
   </svg>
   <pre class="ai-message"></pre>
+  <div class="sources"></div>
 </div>
 `;
 
@@ -436,12 +522,15 @@ ${stopButtonShape}
               if (message.user != "") {
                   newUserMessage();
                   const last = messages.lastElementChild;
-                  last.firstElementChild.innerText = message.user;
+                  last.querySelector(".user-message").innerText = message.user;
                   if (message.assistant == "") {
-                      last.lastElementChild.innerText = "[No saved response.]";
+                      last.querySelector(".ai-message").innerText = "[No saved response.]";
                   }
                   else {
-                      last.lastElementChild.innerText = message.assistant;
+                      last.querySelector(".ai-message").innerText = message.assistant;
+                  }
+                  if (Array.isArray(message.sources)) {
+                      renderSources(last.querySelector(".sources"), message.sources);
                   }
               }
           }
