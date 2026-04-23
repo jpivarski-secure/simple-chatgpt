@@ -346,10 +346,23 @@
       function newUserMessage() {
           messages.insertAdjacentHTML("beforeend", newMessageAsHTML);
           const message = messages.lastElementChild;
+          const userMessage = message.querySelector(".user-message");
           const svg = message.querySelector("svg");
           const fileInput = message.querySelector(".attachment-input");
           const addButton = message.querySelector(".attachment-add");
           svg.dataset.mode = "send";
+          userMessage.addEventListener("keydown", event => {
+              if (event.key != "Enter"  ||  !event.shiftKey  ||  event.isComposing) {
+                  return;
+              }
+              if (svg.dataset.mode != "send") {
+                  return;
+              }
+              event.preventDefault();
+              send(message).catch(error => {
+                  setAiMessageText(message.querySelector(".ai-message"), `[${error.toString()}]`);
+              });
+          });
           svg.addEventListener("click", () => {
               if (svg.dataset.mode == "stop") {
                   stop(message);
