@@ -267,6 +267,7 @@
           }
           newUserMessage();
           localStorage.setItem("history", "");
+          clearAutoSaveDraft();
       });
 
       function getHistory() {
@@ -288,6 +289,141 @@
           const element = document.getElementById(id);
           element.checked = localStorage.getItem(id) == "true";
           element.addEventListener("change", () => { localStorage.setItem(id, element.checked); });
+      }
+
+      function getAutoSaveDraft() {
+          const raw = localStorage.getItem(AUTO_SAVE_STORAGE_KEY);
+          if (raw == null  ||  raw == "") {
+              return null;
+          }
+          try {
+              const parsed = JSON.parse(raw);
+              if (
+                  parsed != null  &&
+                  Number.isInteger(parsed.messageIndex)  &&
+                  parsed.messageIndex >= 0  &&
+                  typeof parsed.text == "string"
+              ) {
+                  return parsed;
+              }
+          }
+          catch (error) {
+          }
+          localStorage.removeItem(AUTO_SAVE_STORAGE_KEY);
+          return null;
+      }
+
+      function resetAutoSaveTracking() {
+          autoSaveFocusedMessage = null;
+          autoSavePendingChanges = 0;
+          autoSaveDirty = false;
+          if (autoSaveTimer != null) {
+              clearTimeout(autoSaveTimer);
+              autoSaveTimer = null;
+          }
+      }
+
+      function clearAutoSaveDraft() {
+          resetAutoSaveTracking();
+          localStorage.removeItem(AUTO_SAVE_STORAGE_KEY);
+      }
+
+      function setAutoSaveFocusedMessage(userMessage) {
+          if (autoSaveFocusedMessage === userMessage) {
+              autoSaveKnownLengths.set(userMessage, userMessage.textContent.length);
+              return;
+          }
+          autoSaveFocusedMessage = userMessage;
+          autoSavePendingChanges = 0;
+          autoSaveDirty = false;
+          autoSaveKnownLengths.set(userMessage, userMessage.textContent.length);
+      }
+
+      function saveAutoSaveDraft() {
+          const userMessage = autoSaveFocusedMessage;
+          if (userMessage == null  ||  !userMessage.isConnected) {
+              localStorage.removeItem(AUTO_SAVE_STORAGE_KEY);
+              autoSavePendingChanges = 0;
+              autoSaveDirty = false;
+              return;
+          }
+          const message = userMessage.closest(".message");
+          const messageIndex = Array.prototype.indexOf.call(messages.children, message);
+          if (message == null  ||  messageIndex < 0) {
+              localStorage.removeItem(AUTO_SAVE_STORAGE_KEY);
+              autoSavePendingChanges = 0;
+              autoSaveDirty = false;
+              return;
+          }
+          const text = userMessage.textContent;
+          if (text == "") {
+              localStorage.removeItem(AUTO_SAVE_STORAGE_KEY);
+          }
+          else {
+              localStorage.setItem(AUTO_SAVE_STORAGE_KEY, JSON.stringify({
+                  messageIndex: messageIndex,
+                  text: text,
+              }));
+          }
+          autoSavePendingChanges = 0;
+          autoSaveDirty = false;
+      }
+
+      async function runAutoSave() {
+          if (autoSavePendingChanges < AUTO_SAVE_CHANGE_THRESHOLD) {
+              autoSaveDirty = false;
+              return;
+          }
+          autoSaveRunning = true;
+          try {
+              await Promise.resolve();
+              saveAutoSaveDraft();
+          }
+          finally {
+              autoSaveRunning = false;
+              if (autoSaveDirty  &&  autoSavePendingChanges >= AUTO_SAVE_CHANGE_THRESHOLD) {
+                  scheduleAutoSave();
+              }
+          }
+      }
+
+      function scheduleAutoSave() {
+          if (autoSavePendingChanges < AUTO_SAVE_CHANGE_THRESHOLD) {
+              return;
+          }
+          if (autoSaveRunning  ||  autoSaveTimer != null) {
+              autoSaveDirty = true;
+              return;
+          }
+          autoSaveDirty = false;
+          autoSaveTimer = setTimeout(() => {
+              autoSaveTimer = null;
+              runAutoSave().catch(() => {});
+          }, 0);
+      }
+
+      function flushAutoSaveDraft() {
+          if (autoSaveFocusedMessage == null) {
+              return;
+          }
+          saveAutoSaveDraft();
+      }
+
+      function restoreAutoSaveDraft() {
+          const draft = getAutoSaveDraft();
+          if (draft == null) {
+              return;
+          }
+          const message = messages.children[draft.messageIndex];
+          if (message == null) {
+              return;
+          }
+          const userMessage = message.querySelector(".user-message");
+          if (userMessage == null) {
+              return;
+          }
+          userMessage.textContent = draft.text;
+          autoSaveKnownLengths.set(userMessage, draft.text.length);
       }
 
       function openGeneratedImagesDb() {
@@ -355,6 +491,18 @@
           const svg = message.querySelector("svg");
           const fileInput = message.querySelector(".attachment-input");
           const addButton = message.querySelector(".attachment-add");
+          autoSaveKnownLengths.set(userMessage, userMessage.textContent.length);
+          userMessage.addEventListener("focus", () => {
+              setAutoSaveFocusedMessage(userMessage);
+          });
+          userMessage.addEventListener("input", () => {
+              const previousLength = autoSaveKnownLengths.get(userMessage)  ||  0;
+              const currentLength = userMessage.textContent.length;
+              autoSaveKnownLengths.set(userMessage, currentLength);
+              setAutoSaveFocusedMessage(userMessage);
+              autoSavePendingChanges += Math.abs(currentLength - previousLength);
+              scheduleAutoSave();
+          });
           svg.dataset.mode = "send";
           userMessage.addEventListener("keydown", event => {
               if (event.key != "Enter"  ||  !event.shiftKey  ||  event.isComposing) {
@@ -669,6 +817,7 @@
       async function restoreHistory(history) {
           clearMessages();
           attachedFiles.clear();
+          resetAutoSaveTracking();
           if (history.length == 0) {
               newUserMessage();
               return;
@@ -759,6 +908,7 @@
           await clearGeneratedImages();
           await saveGeneratedImagesDump(parsed.db);
           localStorage.setItem("history", JSON.stringify(parsed.history));
+          clearAutoSaveDraft();
           await restoreHistory(parsed.history);
       }
 
@@ -1051,6 +1201,7 @@
                   }
               }
 
+              clearAutoSaveDraft();
               finishRequest(message, true);
 
           }).catch(error => {
@@ -1088,6 +1239,14 @@
       let attachmentCounter = 0;
       let generatedImageCounter = 0;
       let generatedImagesDbPromise = openGeneratedImagesDb();
+      const AUTO_SAVE_CHANGE_THRESHOLD = 20;
+      const AUTO_SAVE_STORAGE_KEY = "draft-overlay";
+      let autoSaveFocusedMessage = null;
+      let autoSavePendingChanges = 0;
+      let autoSaveTimer = null;
+      let autoSaveRunning = false;
+      let autoSaveDirty = false;
+      let autoSaveKnownLengths = new WeakMap();
       const sendButtonShape = `
     <g class="send-shape" transform="translate(-38.425328,-84.136154)">
       <path style="fill:#ffff00;stroke:#ffff00;stroke-width:10;stroke-linejoin:round;" d="M 52.567223,151.75928 43.425096,190.61331 144.44559,139.87452 43.425096,89.135727 l 9.142127,38.854033 91.878367,11.88476 z"/>
@@ -1151,6 +1310,7 @@ ${stopButtonShape}
           attachedFiles.clear();
           await clearGeneratedImages().catch(() => {});
           localStorage.setItem("history", "");
+          clearAutoSaveDraft();
           await restoreHistory([]);
 
           reasoningEffort.value = "none";
@@ -1180,7 +1340,17 @@ ${stopButtonShape}
           else {
               await restoreHistory(JSON.parse(history));
           }
+          restoreAutoSaveDraft();
       })();
+
+      document.addEventListener("visibilitychange", () => {
+          if (document.visibilityState == "hidden") {
+              flushAutoSaveDraft();
+          }
+      });
+      window.addEventListener("pagehide", () => {
+          flushAutoSaveDraft();
+      });
 
     </script>
   </body>
