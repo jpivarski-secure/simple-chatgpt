@@ -1136,7 +1136,43 @@ ${stopButtonShape}
           });
       });
 
+      async function runQueryFromUrl() {
+          const params = new URLSearchParams(window.location.search);
+          if (!params.has("q")) {
+              return false;
+          }
+
+          const query = params.get("q")  ||  "";
+          if (activeRequest != null) {
+              activeRequest.message.dataset.suppressNextFinish = "true";
+              activeRequest.controller.abort();
+              activeRequest = null;
+          }
+          attachedFiles.clear();
+          await clearGeneratedImages().catch(() => {});
+          localStorage.setItem("history", "");
+          await restoreHistory([]);
+
+          reasoningEffort.value = "none";
+          localStorage.setItem("reasoning-effort", reasoningEffort.value);
+          webSearch.checked = false;
+          localStorage.setItem("web-search", webSearch.checked);
+          imageGeneration.checked = false;
+          localStorage.setItem("image-generation", imageGeneration.checked);
+
+          const message = messages.firstElementChild;
+          if (message == null) {
+              return true;
+          }
+          message.querySelector(".user-message").textContent = query;
+          await send(message);
+          return true;
+      }
+
       (async () => {
+          if (await runQueryFromUrl()) {
+              return;
+          }
           const history = localStorage.getItem("history")  ||  "";
           if (history == "") {
               await restoreHistory([]);
