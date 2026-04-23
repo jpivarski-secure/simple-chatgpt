@@ -12,13 +12,17 @@
           line-height: 1.2;
       }
 
-      #clear-all {
+      #top-buttons {
           float: right;
+      }
+
+      #top-buttons button {
           background: black;
           color: yellow;
           font-size: 1em;
           line-height: 1.2;
           border: 1px solid #808000;
+          margin-left: 16px;
       }
 
       details {
@@ -86,7 +90,7 @@
       }
 
       #messages {
-          margin-bottom: 80vh;
+          margin-bottom: 16px;
       }
 
       .message {
@@ -156,7 +160,12 @@
     </style>
   </head>
   <body>
-    <button id="clear-all">Clear</button>
+    <div id="top-buttons">
+      <button id="save-history">Save</button>
+      <button id="load-history">Load</button>
+      <button id="clear-all">Clear</button>
+    </div>
+    <input id="load-history-input" type="file" accept=".json,application/json" style="display:none;">
 
     <details><summary>System</summary>
       <div class="message">
@@ -260,6 +269,7 @@
 
       document.getElementById("clear-all").addEventListener("click", async () => {
           if (activeRequest != null) {
+              activeRequest.message.dataset.suppressNextFinish = "true";
               activeRequest.controller.abort();
               activeRequest = null;
           }
@@ -280,6 +290,11 @@
               attachments: Array.from(message.querySelectorAll(".attachment-line")).map(x => x.dataset.path),
               generatedImages: Array.from(message.querySelectorAll(".generated-images img[data-image-id]")).map(x => x.dataset.imageId),
           })));
+      }
+
+      function getHistoryObject() {
+          const history = getHistory();
+          return history == "" ? [] : JSON.parse(history);
       }
 
       function syncCheckboxToLocalStorage(id) {
@@ -337,6 +352,15 @@
           });
       }
 
+      async function saveGeneratedImagesDump(imageDump) {
+          await withImageStore("readwrite", store => {
+              store.clear();
+              for (const [id, dataUrl] of Object.entries(imageDump)) {
+                  store.put({id: id, dataUrl: dataUrl});
+              }
+          });
+      }
+
       function newUserMessage() {
           messages.insertAdjacentHTML("beforeend", newMessageAsHTML);
           const message = messages.lastElementChild;
@@ -379,6 +403,10 @@
           activeRequest = null;
           if (!message.isConnected) {
               return;
+          }
+          if (message.dataset.suppressNextFinish == "true") {
+              delete message.dataset.suppressNextFinish;
+              needsNewMessage = false;
           }
           const svg = message.querySelector("svg");
           setButtonToSend(svg);
@@ -579,6 +607,163 @@
               }
           }
           return content;
+      }
+
+      function historyReferencesAreValid(history) {
+          return (
+              Array.isArray(history)  &&
+              history.every(message =>
+                  message != null  &&
+                  typeof message == "object"  &&
+                  typeof message.user == "string"  &&
+                  typeof message.assistant == "string"  &&
+                  Array.isArray(message.sources)  &&
+                  message.sources.every(x => typeof x == "string")  &&
+                  Array.isArray(message.attachments)  &&
+                  message.attachments.every(x => typeof x == "string")  &&
+                  Array.isArray(message.generatedImages)  &&
+                  message.generatedImages.every(x => typeof x == "string")
+              )
+          );
+      }
+
+      function imageDumpIsValid(imageDump) {
+          return (
+              imageDump != null  &&
+              typeof imageDump == "object"  &&
+              !Array.isArray(imageDump)  &&
+              Object.entries(imageDump).every(([id, dataUrl]) =>
+                  typeof id == "string"  &&
+                  typeof dataUrl == "string"
+              )
+          );
+      }
+
+      function collectReferencedImageIds(history) {
+          const referencedImageIds = [];
+          const seen = new Set();
+          for (const message of history) {
+              for (const imageId of message.generatedImages) {
+                  if (!seen.has(imageId)) {
+                      referencedImageIds.push(imageId);
+                      seen.add(imageId);
+                  }
+              }
+          }
+          return referencedImageIds;
+      }
+
+      async function buildImageDump(history) {
+          const imageDump = {};
+          for (const imageId of collectReferencedImageIds(history)) {
+              const record = await loadGeneratedImage(imageId);
+              if (record != null  &&  typeof record.dataUrl == "string") {
+                  imageDump[imageId] = record.dataUrl;
+              }
+          }
+          return imageDump;
+      }
+
+      function clearMessages() {
+          while (messages.firstChild) {
+              messages.removeChild(messages.firstChild);
+          }
+      }
+
+      async function restoreHistory(history) {
+          clearMessages();
+          attachedFiles.clear();
+          if (history.length == 0) {
+              newUserMessage();
+              return;
+          }
+          for (const message of history) {
+              if (message.user != ""  ||  message.generatedImages.length != 0) {
+                  newUserMessage();
+                  const last = messages.lastElementChild;
+                  last.querySelector(".user-message").innerText = message.user;
+                  if (message.assistant != "") {
+                      setAiMessageText(last.querySelector(".ai-message"), message.assistant);
+                  }
+                  else if (message.generatedImages.length == 0) {
+                      setAiMessageText(last.querySelector(".ai-message"), "[No saved response.]");
+                  }
+                  for (const path of message.attachments) {
+                      attachmentCounter += 1;
+                      addAttachmentLine(last, path, "attachment-" + attachmentCounter);
+                  }
+                  renderSources(last.querySelector(".sources"), message.sources);
+                  await renderStoredImages(last.querySelector(".generated-images"), message.generatedImages);
+              }
+          }
+          newUserMessage();
+      }
+
+      async function saveConversationToDisk() {
+          const history = getHistoryObject();
+          const imageDump = await buildImageDump(history);
+          const name = prompt("Save conversation as:", "conversation.json");
+          if (name == null) {
+              return;
+          }
+          const trimmedName = name.trim();
+          if (trimmedName == "") {
+              return;
+          }
+          const filename = trimmedName.endsWith(".json") ? trimmedName : `${trimmedName}.json`;
+          const exportData = {
+              version: 1,
+              history: history,
+              db: imageDump,
+          };
+          const blob = new Blob([JSON.stringify(exportData, null, 2)], {type: "application/json"});
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 0);
+      }
+
+      async function loadConversationFromFile(file) {
+          let parsed;
+          try {
+              parsed = JSON.parse(await file.text());
+          }
+          catch (error) {
+              alert("Format is wrong.");
+              return;
+          }
+          if (
+              parsed == null  ||
+              typeof parsed != "object"  ||
+              parsed.version !== 1  ||
+              !historyReferencesAreValid(parsed.history)  ||
+              !imageDumpIsValid(parsed.db)
+          ) {
+              alert("Format is wrong.");
+              return;
+          }
+
+          const referencedImageIds = new Set(collectReferencedImageIds(parsed.history));
+          for (const imageId of referencedImageIds) {
+              if (!(imageId in parsed.db)) {
+                  alert("Format is wrong.");
+                  return;
+              }
+          }
+
+          if (activeRequest != null) {
+              activeRequest.message.dataset.suppressNextFinish = "true";
+              activeRequest.controller.abort();
+              activeRequest = null;
+          }
+          await clearGeneratedImages();
+          await saveGeneratedImagesDump(parsed.db);
+          localStorage.setItem(storageKey("history"), JSON.stringify(parsed.history));
+          await restoreHistory(parsed.history);
       }
 
       function beginRequest(message) {
@@ -972,6 +1157,9 @@
       let imageFormatMenu = document.getElementById("image-format-menu");
       let imageModeration = document.getElementById("image-moderation");
       let imageModerationMenu = document.getElementById("image-moderation-menu");
+      let saveHistoryButton = document.getElementById("save-history");
+      let loadHistoryButton = document.getElementById("load-history");
+      let loadHistoryInput = document.getElementById("load-history-input");
       let activeRequest = null;
       let renderedReasoningItems = new Set();
       let attachedFiles = new Map();
@@ -1011,39 +1199,30 @@ ${stopButtonShape}
       setupChoiceMenu(imageQuality, imageQualityMenu, "image-quality");
       setupChoiceMenu(imageFormat, imageFormatMenu, "image-format");
       setupChoiceMenu(imageModeration, imageModerationMenu, "image-moderation");
+      saveHistoryButton.addEventListener("click", () => {
+          saveConversationToDisk().catch(error => {
+              alert(error.toString());
+          });
+      });
+      loadHistoryButton.addEventListener("click", () => loadHistoryInput.click());
+      loadHistoryInput.addEventListener("change", () => {
+          const file = loadHistoryInput.files[0];
+          loadHistoryInput.value = "";
+          if (file == null) {
+              return;
+          }
+          loadConversationFromFile(file).catch(error => {
+              alert(error.toString());
+          });
+      });
 
       (async () => {
           const history = localStorage.getItem(storageKey("history"))  ||  "";
           if (history == "") {
-              newUserMessage();
+              await restoreHistory([]);
           }
           else {
-              for (const message of Object.values(JSON.parse(history))) {
-                  if (message.user != ""  ||  (Array.isArray(message.generatedImages)  &&  message.generatedImages.length != 0)) {
-                      newUserMessage();
-                      const last = messages.lastElementChild;
-                      last.querySelector(".user-message").innerText = message.user;
-                      if (message.assistant != "") {
-                          setAiMessageText(last.querySelector(".ai-message"), message.assistant);
-                      }
-                      else if (!Array.isArray(message.generatedImages)  ||  message.generatedImages.length == 0) {
-                          setAiMessageText(last.querySelector(".ai-message"), "[No saved response.]");
-                      }
-                      if (Array.isArray(message.attachments)) {
-                          for (const path of message.attachments) {
-                              attachmentCounter += 1;
-                              addAttachmentLine(last, path, "attachment-" + attachmentCounter);
-                          }
-                      }
-                      if (Array.isArray(message.sources)) {
-                          renderSources(last.querySelector(".sources"), message.sources);
-                      }
-                      if (Array.isArray(message.generatedImages)) {
-                          await renderStoredImages(last.querySelector(".generated-images"), message.generatedImages);
-                      }
-                  }
-              }
-              newUserMessage();
+              await restoreHistory(JSON.parse(history));
           }
       })();
 
