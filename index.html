@@ -12,6 +12,15 @@
           line-height: 1.2;
       }
 
+      #control-pane {
+          position: sticky;
+          top: 0;
+          z-index: 20;
+          background: black;
+          border-bottom: 1px solid black;
+          padding-bottom: 6px;
+      }
+
       #top-buttons {
           float: right;
       }
@@ -57,7 +66,7 @@
       }
 
       #controls {
-          margin-bottom: 6px;
+          margin-bottom: 0;
       }
 
       .controls-row {
@@ -90,6 +99,7 @@
       }
 
       #messages {
+          margin-top: 6px;
           margin-bottom: 80vh;
       }
 
@@ -160,55 +170,57 @@
     </style>
   </head>
   <body>
-    <div id="top-buttons">
-      <button id="save-history">Save</button>
-      <button id="load-history">Load</button>
-      <button id="clear-all">Clear</button>
-    </div>
-    <input id="load-history-input" type="file" accept=".json,application/json" style="display:none;">
-
-    <details><summary>System</summary>
-      <div class="message">
-        <div class="user-message" id="system-message" contenteditable="plaintext-only"></div>
+    <div id="control-pane">
+      <div id="top-buttons">
+        <button id="save-history">Save</button>
+        <button id="load-history">Load</button>
+        <button id="clear-all">Clear</button>
       </div>
-    </details>
+      <input id="load-history-input" type="file" accept=".json,application/json" style="display:none;">
 
-    <div id="controls">
-      <div class="controls-row">
-        <input id="model" size="8" type="input" placeholder="Model...">
-        <span class="menu-wrapper">
-          <input id="reasoning-effort" size="6" type="input" placeholder="Reason...">
-          <div id="reasoning-menu" class="choice-menu">
-            <div class="choice-option">none</div>
-            <div class="choice-option">minimal</div>
-            <div class="choice-option">low</div>
-            <div class="choice-option">medium</div>
-            <div class="choice-option">high</div>
-            <div class="choice-option">xhigh</div>
-          </div>
-        </span>
-        <input id="temp" size="4" type="input" placeholder="Temp...">
-        <input id="key" size="4" type="password" placeholder="API key...">
-      </div>
-      <div class="controls-row">
-        <label><input id="web-search" type="checkbox"> web</label>
-        <label><input id="image-generation" type="checkbox"> image</label>
-        <span class="menu-wrapper">
-          <input id="image-size" size="7" type="input" placeholder="Size...">
-          <div id="image-size-menu" class="choice-menu">
-            <div class="choice-option">1024x1024</div>
-            <div class="choice-option">1536x1024</div>
-            <div class="choice-option">1024x1536</div>
-          </div>
-        </span>
-        <span class="menu-wrapper">
-          <input id="image-quality" size="4" type="input" placeholder="Qual...">
-          <div id="image-quality-menu" class="choice-menu">
-            <div class="choice-option">low</div>
-            <div class="choice-option">medium</div>
-            <div class="choice-option">high</div>
-          </div>
-        </span>
+      <details><summary>System</summary>
+        <div class="message">
+          <div class="user-message" id="system-message" contenteditable="plaintext-only"></div>
+        </div>
+      </details>
+
+      <div id="controls">
+        <div class="controls-row">
+          <input id="model" size="8" type="input" placeholder="Model...">
+          <span class="menu-wrapper">
+            <input id="reasoning-effort" size="6" type="input" placeholder="Reason...">
+            <div id="reasoning-menu" class="choice-menu">
+              <div class="choice-option">none</div>
+              <div class="choice-option">minimal</div>
+              <div class="choice-option">low</div>
+              <div class="choice-option">medium</div>
+              <div class="choice-option">high</div>
+              <div class="choice-option">xhigh</div>
+            </div>
+          </span>
+          <input id="temp" size="4" type="input" placeholder="Temp...">
+          <input id="key" size="4" type="password" placeholder="API key...">
+        </div>
+        <div class="controls-row">
+          <label><input id="web-search" type="checkbox"> web</label>
+          <label><input id="image-generation" type="checkbox"> image</label>
+          <span class="menu-wrapper">
+            <input id="image-size" size="7" type="input" placeholder="Size...">
+            <div id="image-size-menu" class="choice-menu">
+              <div class="choice-option">1024x1024</div>
+              <div class="choice-option">1536x1024</div>
+              <div class="choice-option">1024x1536</div>
+            </div>
+          </span>
+          <span class="menu-wrapper">
+            <input id="image-quality" size="4" type="input" placeholder="Qual...">
+            <div id="image-quality-menu" class="choice-menu">
+              <div class="choice-option">low</div>
+              <div class="choice-option">medium</div>
+              <div class="choice-option">high</div>
+            </div>
+          </span>
+        </div>
       </div>
     </div>
 
