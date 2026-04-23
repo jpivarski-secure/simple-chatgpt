@@ -12,28 +12,17 @@
           line-height: 1.2;
       }
 
-      #clear-all {
+      #top-buttons {
           float: right;
+      }
+
+      #top-buttons button {
           background: black;
           color: yellow;
           font-size: 1em;
           line-height: 1.2;
           border: 1px solid #808000;
-      }
-
-      #storage-controls {
-          text-align: center;
-          margin-top: 16px;
-          margin-bottom: 80vh;
-      }
-
-      #storage-controls button {
-          background: black;
-          color: yellow;
-          font-size: 1em;
-          line-height: 1.2;
-          border: 1px solid #808000;
-          margin: 0 8px;
+          margin-left: 16px;
       }
 
       details {
@@ -170,7 +159,12 @@
     </style>
   </head>
   <body>
-    <button id="clear-all">Clear</button>
+    <div id="top-buttons">
+      <button id="save-history">Save</button>
+      <button id="load-history">Load</button>
+      <button id="clear-all">Clear</button>
+    </div>
+    <input id="load-history-input" type="file" accept=".json,application/json" style="display:none;">
 
     <details><summary>System</summary>
       <div class="message">
@@ -218,11 +212,6 @@
     </div>
 
     <div id="messages"></div>
-    <div id="storage-controls">
-      <button id="save-history">Save</button>
-      <button id="load-history">Load</button>
-      <input id="load-history-input" type="file" accept=".json,application/json" style="display:none;">
-    </div>
 
     <script>
       function syncDivToLocalStorage(id) {
