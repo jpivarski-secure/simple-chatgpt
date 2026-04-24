@@ -1302,6 +1302,7 @@ ${stopButtonShape}
           }
 
           const query = params.get("q")  ||  "";
+          const useWebSearch = params.has("w");
           if (activeRequest != null) {
               activeRequest.message.dataset.suppressNextFinish = "true";
               activeRequest.controller.abort();
@@ -1315,7 +1316,7 @@ ${stopButtonShape}
 
           reasoningEffort.value = "none";
           localStorage.setItem("reasoning-effort", reasoningEffort.value);
-          webSearch.checked = false;
+          webSearch.checked = useWebSearch;
           localStorage.setItem("web-search", webSearch.checked);
           imageGeneration.checked = false;
           localStorage.setItem("image-generation", imageGeneration.checked);
