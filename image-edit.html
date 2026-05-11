@@ -1,0 +1,1224 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta charset="utf-8">
+    <title>ChatGPT</title>
+    <style>
+      body {
+          font-family: Arial, Helvetica, sans-serif;
+          background: black;
+          font-size: 1em;
+          line-height: 1.2;
+      }
+
+      #control-pane {
+          position: sticky;
+          top: 0;
+          z-index: 20;
+          background: black;
+          border-bottom: 1px solid black;
+          padding-bottom: 6px;
+      }
+
+      #top-buttons {
+          float: right;
+      }
+
+      #top-buttons button {
+          background: black;
+          color: yellow;
+          font-size: 1em;
+          line-height: 1.2;
+          border: 1px solid #808000;
+          margin-left: 16px;
+      }
+
+      details {
+          color: #ffff00;
+          margin-bottom: 10px;
+          font-size: 1em;
+          line-height: 1.2;
+      }
+
+      input {
+          border: 1px solid #808000;
+          background: black;
+          color: #ffff00;
+          outline: none;
+          font-size: 1em;
+          line-height: 1.2;
+      }
+
+      label {
+          color: #ffff00;
+      }
+
+      a {
+          font-family: Arial, Helvetica, sans-serif;
+          font-size: 1em;
+          line-height: 1.2;
+          color: #00ff00;
+      }
+
+      a:visited {
+          color: #00ff00;
+      }
+
+      #controls {
+          margin-bottom: 0;
+      }
+
+      .controls-row {
+          margin-bottom: 4px;
+      }
+
+      .menu-wrapper {
+          position: relative;
+          display: inline-block;
+      }
+
+      .choice-menu {
+          position: absolute;
+          top: calc(100% + 2px);
+          left: 0;
+          display: none;
+          border: 1px solid #808000;
+          background: black;
+          color: #ffff00;
+          z-index: 10;
+      }
+
+      .choice-option {
+          padding: 4px 8px;
+          border-bottom: 1px solid #808000;
+      }
+
+      .choice-option:last-child {
+          border-bottom: 0;
+      }
+
+      #messages {
+          margin-top: 6px;
+          margin-bottom: 80vh;
+      }
+
+      .message {
+          width: 100%;
+          margin-top: 10px;
+          color: #ffff00;
+      }
+
+      .user-message {
+          display: inline-block;
+          width: calc(100% - 50px);
+          min-height: 1em;
+          overflow: hidden;
+          outline: none;
+          resize: none;
+          padding: 8px;
+          box-sizing: border-box;
+          border: 1px solid #808000;
+          font-size: 1em;
+          line-height: 1.2;
+      }
+
+      .message svg {
+          margin-left: 3px;
+          margin-bottom: 3px;
+      }
+
+      .input-images,
+      .generated-images {
+          margin-top: 4px;
+      }
+
+      .input-image-card {
+          display: inline-block;
+          width: min(240px, 100%);
+          margin-right: 8px;
+          margin-bottom: 8px;
+          vertical-align: top;
+      }
+
+      .input-image-card img,
+      .generated-images img {
+          display: block;
+          width: 100%;
+          margin-top: 4px;
+      }
+
+      .input-image-meta {
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+      }
+
+      .input-image-toggle {
+          display: inline-block;
+          width: 1em;
+          text-align: center;
+          cursor: pointer;
+          user-select: none;
+      }
+
+      .attachment-controls {
+          margin-top: 2px;
+          margin-left: 0;
+          color: #ffff00;
+      }
+
+      .ai-message {
+          font-family: Arial, Helvetica, sans-serif;
+          padding: 2px;
+          margin: 0;
+          white-space: pre-wrap;
+          color: #00ff00;
+          font-size: 1em;
+          line-height: 1.2;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="control-pane">
+      <div id="top-buttons">
+        <button id="save-history">Save</button>
+        <button id="load-history">Load</button>
+        <button id="clear-all">Clear</button>
+      </div>
+      <input id="load-history-input" type="file" accept=".json,application/json" style="display:none;">
+
+      <details><summary>System</summary>
+        <div class="message">
+          <div class="user-message" id="system-message" contenteditable="plaintext-only"></div>
+        </div>
+      </details>
+
+      <div id="controls">
+        <div class="controls-row">
+          <span class="menu-wrapper">
+            <input id="model" size="10" type="input" placeholder="Model...">
+            <div id="model-menu" class="choice-menu">
+              <div class="choice-option">gpt-image-2</div>
+            </div>
+          </span>
+          <input id="key" size="4" type="password" placeholder="API key...">
+        </div>
+        <div class="controls-row">
+          <span class="menu-wrapper">
+            <input id="image-size" size="7" type="input" placeholder="Size...">
+            <div id="image-size-menu" class="choice-menu">
+              <div class="choice-option">1024x1024</div>
+              <div class="choice-option">1536x1024</div>
+              <div class="choice-option">1024x1536</div>
+              <div class="choice-option">2048x2048</div>
+              <div class="choice-option">2048x1152</div>
+              <div class="choice-option">3840x2160</div>
+              <div class="choice-option">2160x3840</div>
+            </div>
+          </span>
+          <span class="menu-wrapper">
+            <input id="image-quality" size="4" type="input" placeholder="Qual...">
+            <div id="image-quality-menu" class="choice-menu">
+              <div class="choice-option">low</div>
+              <div class="choice-option">medium</div>
+              <div class="choice-option">high</div>
+            </div>
+          </span>
+          <span class="menu-wrapper">
+            <input id="image-format" size="2" type="input" placeholder="Fmt...">
+            <div id="image-format-menu" class="choice-menu">
+              <div class="choice-option">png</div>
+              <div class="choice-option">jpeg</div>
+            </div>
+          </span>
+          <span class="menu-wrapper">
+            <input id="image-moderation" size="2" type="input" placeholder="Mod...">
+            <div id="image-moderation-menu" class="choice-menu">
+              <div class="choice-option">auto</div>
+              <div class="choice-option">low</div>
+            </div>
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <div id="messages"></div>
+
+    <script>
+      const STORAGE_PREFIX = "image-edit-";
+
+      function storageKey(key) {
+          return STORAGE_PREFIX + key;
+      }
+
+      function syncDivToLocalStorage(id) {
+          const element = document.getElementById(id);
+          element.textContent = localStorage.getItem(storageKey(id))  ||  "You are an image editing assistant. Use the provided images and text instructions to create one new image.";
+          element.addEventListener("input", () => { localStorage.setItem(storageKey(id), element.textContent); });
+          element.addEventListener("paste", () => { localStorage.setItem(storageKey(id), element.textContent); });
+      }
+
+      function syncInputToLocalStorage(id, fallback = "") {
+          const element = document.getElementById(id);
+          element.value = localStorage.getItem(storageKey(id))  ||  fallback;
+          element.addEventListener("input", () => { localStorage.setItem(storageKey(id), element.value); });
+          element.addEventListener("paste", () => { localStorage.setItem(storageKey(id), element.value); });
+      }
+
+      function setupChoiceMenu(input, menu, storageId) {
+          function selectOption(option) {
+              input.value = option.textContent;
+              localStorage.setItem(storageKey(storageId), input.value);
+              hideMenu(menu);
+              input.blur();
+          }
+
+          input.addEventListener("focus", () => showMenu(menu));
+          input.addEventListener("click", () => showMenu(menu));
+          input.addEventListener("input", () => showMenu(menu));
+          input.addEventListener("blur", () => {
+              setTimeout(() => hideMenu(menu), 100);
+          });
+          menu.addEventListener("pointerdown", event => {
+              const option = event.target.closest(".choice-option");
+              if (option == null) {
+                  return;
+              }
+              event.preventDefault();
+              selectOption(option);
+          });
+          menu.addEventListener("mousedown", event => {
+              const option = event.target.closest(".choice-option");
+              if (option == null) {
+                  return;
+              }
+              event.preventDefault();
+              selectOption(option);
+          });
+      }
+
+      function showMenu(menu) {
+          menu.style.display = "block";
+      }
+
+      function hideMenu(menu) {
+          menu.style.display = "none";
+      }
+
+      function getHistory() {
+          return JSON.stringify(Array.from(messages.children).map(message => ({
+              user: message.querySelector(".user-message").innerText,
+              assistant: message.querySelector(".ai-message").dataset.rawText  ||  "",
+              inputImages: Array.from(message.querySelectorAll(".input-image-card")).map(card => ({
+                  id: card.dataset.imageId,
+                  path: card.dataset.path  ||  "",
+              })),
+              generatedImages: Array.from(message.querySelectorAll(".generated-images img[data-image-id]")).map(x => x.dataset.imageId),
+          })));
+      }
+
+      function getHistoryObject() {
+          const history = getHistory();
+          return history == "" ? [] : JSON.parse(history);
+      }
+
+      function historyReferencesAreValid(history) {
+          return (
+              Array.isArray(history)  &&
+              history.every(message =>
+                  message != null  &&
+                  typeof message == "object"  &&
+                  typeof message.user == "string"  &&
+                  typeof message.assistant == "string"  &&
+                  Array.isArray(message.inputImages)  &&
+                  message.inputImages.every(image =>
+                      image != null  &&
+                      typeof image == "object"  &&
+                      typeof image.id == "string"  &&
+                      typeof image.path == "string"
+                  )  &&
+                  Array.isArray(message.generatedImages)  &&
+                  message.generatedImages.every(x => typeof x == "string")
+              )
+          );
+      }
+
+      function imageDumpIsValid(imageDump) {
+          return (
+              imageDump != null  &&
+              typeof imageDump == "object"  &&
+              !Array.isArray(imageDump)  &&
+              Object.entries(imageDump).every(([id, record]) =>
+                  typeof id == "string"  &&
+                  record != null  &&
+                  typeof record == "object"  &&
+                  typeof record.dataUrl == "string"  &&
+                  (record.path == null  ||  typeof record.path == "string")
+              )
+          );
+      }
+
+      function collectReferencedImageIds(history) {
+          const referencedImageIds = [];
+          const seen = new Set();
+          for (const message of history) {
+              for (const image of message.inputImages) {
+                  if (!seen.has(image.id)) {
+                      referencedImageIds.push(image.id);
+                      seen.add(image.id);
+                  }
+              }
+              for (const imageId of message.generatedImages) {
+                  if (!seen.has(imageId)) {
+                      referencedImageIds.push(imageId);
+                      seen.add(imageId);
+                  }
+              }
+          }
+          return referencedImageIds;
+      }
+
+      async function buildImageDump(history) {
+          const imageDump = {};
+          for (const imageId of collectReferencedImageIds(history)) {
+              const record = await loadStoredImage(imageId);
+              if (record != null  &&  typeof record.dataUrl == "string") {
+                  imageDump[imageId] = {
+                      dataUrl: record.dataUrl,
+                      path: record.path  ||  "",
+                  };
+              }
+          }
+          return imageDump;
+      }
+
+      function clearMessages() {
+          while (messages.firstChild) {
+              messages.removeChild(messages.firstChild);
+          }
+      }
+
+      async function restoreHistory(history) {
+          clearMessages();
+          resetAutoSaveTracking();
+          if (history.length == 0) {
+              newUserMessage();
+              return;
+          }
+          for (const message of history) {
+              if (message.user != ""  ||  message.inputImages.length != 0  ||  message.generatedImages.length != 0) {
+                  newUserMessage();
+                  const last = messages.lastElementChild;
+                  last.querySelector(".user-message").innerText = message.user;
+                  if (message.assistant != "") {
+                      setAiMessageText(last.querySelector(".ai-message"), message.assistant);
+                  }
+                  for (const image of message.inputImages) {
+                      const record = await loadStoredImage(image.id);
+                      if (record != null) {
+                          renderInputImage(last.querySelector(".input-images"), record.dataUrl, image.id, image.path || record.path || "");
+                      }
+                  }
+                  await renderStoredImages(last.querySelector(".generated-images"), message.generatedImages);
+              }
+          }
+          newUserMessage();
+      }
+
+      async function saveConversationToDisk() {
+          const history = getHistoryObject();
+          const imageDump = await buildImageDump(history);
+          const name = prompt("Save conversation as:", "conversation.json");
+          if (name == null) {
+              return;
+          }
+          const trimmedName = name.trim();
+          if (trimmedName == "") {
+              return;
+          }
+          const filename = trimmedName.endsWith(".json") ? trimmedName : `${trimmedName}.json`;
+          const exportData = {
+              version: 1,
+              history: history,
+              db: imageDump,
+          };
+          const blob = new Blob([JSON.stringify(exportData, null, 2)], {type: "application/json"});
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 0);
+      }
+
+      async function loadConversationFromFile(file) {
+          let parsed;
+          try {
+              parsed = JSON.parse(await file.text());
+          }
+          catch (error) {
+              alert("Format is wrong.");
+              return;
+          }
+          if (
+              parsed == null  ||
+              typeof parsed != "object"  ||
+              parsed.version !== 1  ||
+              !historyReferencesAreValid(parsed.history)  ||
+              !imageDumpIsValid(parsed.db)
+          ) {
+              alert("Format is wrong.");
+              return;
+          }
+
+          const referencedImageIds = new Set(collectReferencedImageIds(parsed.history));
+          for (const imageId of referencedImageIds) {
+              if (!(imageId in parsed.db)) {
+                  alert("Format is wrong.");
+                  return;
+              }
+          }
+
+          if (activeRequest != null) {
+              activeRequest.message.dataset.suppressNextFinish = "true";
+              activeRequest.controller.abort();
+              activeRequest = null;
+          }
+          await clearStoredImages();
+          await saveStoredImagesDump(parsed.db);
+          localStorage.setItem(storageKey("history"), JSON.stringify(parsed.history));
+          clearAutoSaveDraft();
+          await restoreHistory(parsed.history);
+      }
+
+      function openImagesDb() {
+          return new Promise((resolve, reject) => {
+              const request = indexedDB.open("image-edit-simple-chatgpt-images", 1);
+              request.onupgradeneeded = () => {
+                  request.result.createObjectStore("images", {keyPath: "id"});
+              };
+              request.onsuccess = () => resolve(request.result);
+              request.onerror = () => reject(request.error);
+          });
+      }
+
+      async function withImageStore(mode, callback) {
+          const db = await imagesDbPromise;
+          return await new Promise((resolve, reject) => {
+              const transaction = db.transaction("images", mode);
+              const store = transaction.objectStore("images");
+              const result = callback(store);
+              transaction.oncomplete = () => resolve(result);
+              transaction.onerror = () => reject(transaction.error);
+              transaction.onabort = () => reject(transaction.error);
+          });
+      }
+
+      async function saveStoredImage(dataUrl, path) {
+          imageCounter += 1;
+          const id = "stored-image-" + Date.now() + "-" + imageCounter;
+          await withImageStore("readwrite", store => {
+              store.put({id: id, dataUrl: dataUrl, path: path});
+          });
+          return id;
+      }
+
+      async function loadStoredImage(id) {
+          const db = await imagesDbPromise;
+          return await new Promise((resolve, reject) => {
+              const transaction = db.transaction("images", "readonly");
+              const store = transaction.objectStore("images");
+              const request = store.get(id);
+              request.onsuccess = () => resolve(request.result  ||  null);
+              request.onerror = () => reject(request.error);
+          });
+      }
+
+      async function clearStoredImages() {
+          await withImageStore("readwrite", store => {
+              store.clear();
+          });
+      }
+
+      async function saveStoredImagesDump(imageDump) {
+          await withImageStore("readwrite", store => {
+              store.clear();
+              for (const [id, record] of Object.entries(imageDump)) {
+                  store.put({
+                      id: id,
+                      dataUrl: record.dataUrl,
+                      path: record.path || "",
+                  });
+              }
+          });
+      }
+
+      async function deleteStoredImage(id) {
+          await withImageStore("readwrite", store => {
+              store.delete(id);
+          });
+      }
+
+      async function listStoredImageIds() {
+          const db = await imagesDbPromise;
+          return await new Promise((resolve, reject) => {
+              const transaction = db.transaction("images", "readonly");
+              const store = transaction.objectStore("images");
+              const ids = [];
+              const request = store.openCursor();
+              request.onsuccess = () => {
+                  const cursor = request.result;
+                  if (cursor == null) {
+                      resolve(ids);
+                      return;
+                  }
+                  ids.push(cursor.key);
+                  cursor.continue();
+              };
+              request.onerror = () => reject(request.error);
+          });
+      }
+
+      async function pruneUnusedStoredImages() {
+          const referenced = new Set(collectReferencedImageIds(getHistoryObject()));
+          for (const id of await listStoredImageIds()) {
+              if (!referenced.has(id)) {
+                  await deleteStoredImage(id);
+              }
+          }
+      }
+
+      function renderInputImage(container, dataUrl, imageId, path) {
+          const card = document.createElement("div");
+          card.className = "input-image-card";
+          card.dataset.imageId = imageId;
+          card.dataset.path = path;
+
+          const meta = document.createElement("div");
+          meta.className = "input-image-meta";
+
+          const toggle = document.createElement("span");
+          toggle.className = "input-image-toggle";
+          toggle.textContent = "−";
+          toggle.addEventListener("click", async () => {
+              card.remove();
+              localStorage.setItem(storageKey("history"), getHistory());
+              await pruneUnusedStoredImages();
+          });
+          meta.appendChild(toggle);
+          meta.appendChild(document.createTextNode(path));
+
+          const img = document.createElement("img");
+          img.src = dataUrl;
+
+          card.appendChild(meta);
+          card.appendChild(img);
+          container.appendChild(card);
+      }
+
+      function renderGeneratedImage(container, dataUrl, imageId) {
+          const img = document.createElement("img");
+          img.src = dataUrl;
+          if (imageId != null) {
+              img.dataset.imageId = imageId;
+          }
+          container.appendChild(img);
+      }
+
+      async function renderStoredImages(container, imageIds) {
+          for (const imageId of imageIds) {
+              const record = await loadStoredImage(imageId);
+              if (record != null) {
+                  renderGeneratedImage(container, record.dataUrl, imageId);
+              }
+          }
+      }
+
+      async function fileToDataUrl(file) {
+          return await new Promise((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () => resolve(reader.result);
+              reader.onerror = () => reject(reader.error  ||  new Error("Could not read file."));
+              reader.readAsDataURL(file);
+          });
+      }
+
+      async function blobToDataUrl(blob) {
+          return await new Promise((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () => resolve(reader.result);
+              reader.onerror = () => reject(reader.error  ||  new Error("Could not read blob."));
+              reader.readAsDataURL(blob);
+          });
+      }
+
+      async function imageUrlToDataUrl(url) {
+          const response = await fetch(url);
+          if (!response.ok) {
+              throw new Error(`Could not fetch generated image URL: ${response.status}`);
+          }
+          return await blobToDataUrl(await response.blob());
+      }
+
+      function isImageFile(file) {
+          if (file.type  &&  file.type.startsWith("image/")) {
+              return true;
+          }
+          const name = file.name.toLowerCase();
+          return (
+              name.endsWith(".png")  ||
+              name.endsWith(".jpg")  ||
+              name.endsWith(".jpeg")  ||
+              name.endsWith(".gif")  ||
+              name.endsWith(".webp")  ||
+              name.endsWith(".heic")  ||
+              name.endsWith(".heif")
+          );
+      }
+
+      async function addInputImage(message, file) {
+          if (!isImageFile(file)) {
+              throw new Error(`Not an image: ${file.name}`);
+          }
+          const dataUrl = await fileToDataUrl(file);
+          const imageId = await saveStoredImage(dataUrl, file.name);
+          renderInputImage(message.querySelector(".input-images"), dataUrl, imageId, file.name);
+      }
+
+      function collectMessageImageIds(message) {
+          const ids = [];
+          for (const card of message.querySelectorAll(".input-image-card")) {
+              if (card.dataset.imageId) {
+                  ids.push(card.dataset.imageId);
+              }
+          }
+          for (const image of message.querySelectorAll(".generated-images img[data-image-id]")) {
+              ids.push(image.dataset.imageId);
+          }
+          return ids;
+      }
+
+      async function buildEditPrompt(message) {
+          const parts = [];
+          const systemText = systemMessage.textContent.trim();
+          if (systemText != "") {
+              parts.push("System instructions:\n" + systemText);
+          }
+          const conversation = [];
+          for (const child of messages.children) {
+              const userText = child.querySelector(".user-message").textContent.trim();
+              const assistantText = child.querySelector(".ai-message").dataset.rawText  ||  "";
+              if (child == message) {
+                  if (userText != "") {
+                      conversation.push("User: " + userText);
+                  }
+                  break;
+              }
+              if (userText != "") {
+                  conversation.push("User: " + userText);
+              }
+              if (assistantText.trim() != "") {
+                  conversation.push("Assistant: " + assistantText.trim());
+              }
+          }
+          if (conversation.length != 0) {
+              parts.push("Conversation context:\n" + conversation.join("\n\n"));
+          }
+          parts.push("Use all provided images as context and create one edited or combined image that best satisfies the latest user request.");
+          return parts.join("\n\n");
+      }
+
+      async function collectHistoryImages(message) {
+          const images = [];
+          const seen = new Set();
+          for (const child of messages.children) {
+              for (const imageId of collectMessageImageIds(child)) {
+                  if (seen.has(imageId)) {
+                      continue;
+                  }
+                  const record = await loadStoredImage(imageId);
+                  if (record != null) {
+                      images.push({image_url: record.dataUrl});
+                      seen.add(imageId);
+                  }
+              }
+              if (child == message) {
+                  break;
+              }
+          }
+          return images;
+      }
+
+      function renderAiMessage(output) {
+          const text = output.dataset.rawText  ||  "";
+          output.textContent = text;
+      }
+
+      function setAiMessageText(output, text) {
+          output.dataset.rawText = text;
+          renderAiMessage(output);
+      }
+
+      function beginRequest(message) {
+          const controller = new AbortController();
+          const svg = message.querySelector("svg");
+          setButtonToStop(svg);
+          activeRequest = {message: message, controller: controller};
+          return controller;
+      }
+
+      function setButtonToSend(svg) {
+          svg.dataset.mode = "send";
+          svg.querySelector(".send-shape").style.display = "";
+          svg.querySelector(".stop-shape").style.display = "none";
+      }
+
+      function setButtonToStop(svg) {
+          svg.dataset.mode = "stop";
+          svg.querySelector(".send-shape").style.display = "none";
+          svg.querySelector(".stop-shape").style.display = "";
+      }
+
+      function finishRequest(message, needsNewMessage) {
+          activeRequest = null;
+          if (!message.isConnected) {
+              return;
+          }
+          if (message.dataset.suppressNextFinish == "true") {
+              delete message.dataset.suppressNextFinish;
+              needsNewMessage = false;
+          }
+          const svg = message.querySelector("svg");
+          setButtonToSend(svg);
+          localStorage.setItem(storageKey("history"), getHistory());
+          if (needsNewMessage) {
+              newUserMessage();
+          }
+      }
+
+      function stop(message) {
+          if (activeRequest != null  &&  activeRequest.message == message) {
+              activeRequest.controller.abort();
+          }
+      }
+
+      async function send(message) {
+          if (activeRequest != null) {
+              return;
+          }
+          if (!model.value  ||  !key.value) {
+              return;
+          }
+
+          while (message.nextSibling) {
+              messages.removeChild(message.nextSibling);
+          }
+          const output = message.querySelector(".ai-message");
+          const images = message.querySelector(".generated-images");
+          setAiMessageText(output, "");
+          images.textContent = "";
+
+          localStorage.setItem(storageKey("history"), getHistory());
+          await pruneUnusedStoredImages();
+
+          const inputImages = await collectHistoryImages(message);
+          if (inputImages.length == 0) {
+              throw new Error("Attach or generate at least one image before sending an edit request.");
+          }
+
+          const body = {
+              model: model.value,
+              prompt: await buildEditPrompt(message),
+              images: inputImages,
+          };
+          if (imageSize.value.trim() != "") {
+              body["size"] = imageSize.value.trim();
+          }
+          if (imageQuality.value.trim() != "") {
+              body["quality"] = imageQuality.value.trim();
+          }
+          if (imageFormat.value.trim() != "") {
+              body["output_format"] = imageFormat.value.trim();
+              if (imageFormat.value.trim() == "jpeg") {
+                  body["output_compression"] = 90;
+              }
+          }
+          if (imageModeration.value.trim() != "") {
+              body["moderation"] = imageModeration.value.trim();
+          }
+          if (!model.value.startsWith("gpt-image-")) {
+              body["response_format"] = "b64_json";
+          }
+
+          const controller = beginRequest(message);
+
+          return fetch("https://api.openai.com/v1/images/edits", {
+              method: "POST",
+              headers: {
+                  "Content-Type": "application/json",
+                  "Authorization": "Bearer " + key.value,
+              },
+              signal: controller.signal,
+              body: JSON.stringify(body),
+
+          }).then(async response => {
+              if (!response.ok) {
+                  let message = `HTML response is ${response.status}.`;
+                  try {
+                      const errorBody = await response.json();
+                      message = errorBody.error?.message  ||  message;
+                  }
+                  catch (error) {
+                  }
+                  throw new Error(message);
+              }
+
+              const json = await response.json();
+              const item = json.data?.[0];
+              if (item == null) {
+                  throw new Error("No image data returned.");
+              }
+              let dataUrl;
+              if (typeof item.b64_json == "string"  &&  item.b64_json != "") {
+                  const format = body["output_format"]  ||  "png";
+                  dataUrl = `data:image/${format};base64,${item.b64_json}`;
+              }
+              else if (typeof item.url == "string"  &&  item.url != "") {
+                  dataUrl = await imageUrlToDataUrl(item.url);
+              }
+              else {
+                  throw new Error("No image data returned.");
+              }
+              const imageId = await saveStoredImage(dataUrl, "");
+              renderGeneratedImage(images, dataUrl, imageId);
+
+              clearAutoSaveDraft();
+              finishRequest(message, true);
+
+          }).catch(error => {
+              if (error.name == "AbortError") {
+                  finishRequest(message, true);
+              }
+              else {
+                  setAiMessageText(output, `[${error.toString()}]`);
+                  finishRequest(message, false);
+              }
+          });
+      }
+
+      function newUserMessage() {
+          messages.insertAdjacentHTML("beforeend", newMessageAsHTML);
+          const message = messages.lastElementChild;
+          const userMessage = message.querySelector(".user-message");
+          const svg = message.querySelector("svg");
+          const fileInput = message.querySelector(".attachment-input");
+          const addButton = message.querySelector(".attachment-add");
+          autoSaveKnownLengths.set(userMessage, userMessage.textContent.length);
+          userMessage.addEventListener("focus", () => {
+              setAutoSaveFocusedMessage(userMessage);
+          });
+          userMessage.addEventListener("input", () => {
+              const previousLength = autoSaveKnownLengths.get(userMessage)  ||  0;
+              const currentLength = userMessage.textContent.length;
+              autoSaveKnownLengths.set(userMessage, currentLength);
+              setAutoSaveFocusedMessage(userMessage);
+              autoSavePendingChanges += Math.abs(currentLength - previousLength);
+              scheduleAutoSave();
+          });
+          svg.dataset.mode = "send";
+          userMessage.addEventListener("keydown", event => {
+              if (event.key != "Enter"  ||  !event.shiftKey  ||  event.isComposing) {
+                  return;
+              }
+              if (svg.dataset.mode != "send") {
+                  return;
+              }
+              event.preventDefault();
+              send(message).catch(error => {
+                  setAiMessageText(message.querySelector(".ai-message"), `[${error.toString()}]`);
+              });
+          });
+          svg.addEventListener("click", () => {
+              if (svg.dataset.mode == "stop") {
+                  stop(message);
+              }
+              else {
+                  send(message).catch(error => {
+                      setAiMessageText(message.querySelector(".ai-message"), `[${error.toString()}]`);
+                  });
+              }
+          });
+          addButton.addEventListener("click", () => fileInput.click());
+          fileInput.addEventListener("change", async () => {
+              try {
+                  for (const file of fileInput.files) {
+                      await addInputImage(message, file);
+                  }
+                  localStorage.setItem(storageKey("history"), getHistory());
+              }
+              catch (error) {
+                  setAiMessageText(message.querySelector(".ai-message"), `[${error.toString()}]`);
+              }
+              finally {
+                  fileInput.value = "";
+              }
+          });
+      }
+
+      function getAutoSaveDraft() {
+          const raw = localStorage.getItem(AUTO_SAVE_STORAGE_KEY);
+          if (raw == null  ||  raw == "") {
+              return null;
+          }
+          try {
+              const parsed = JSON.parse(raw);
+              if (
+                  parsed != null  &&
+                  Number.isInteger(parsed.messageIndex)  &&
+                  parsed.messageIndex >= 0  &&
+                  typeof parsed.text == "string"
+              ) {
+                  return parsed;
+              }
+          }
+          catch (error) {
+          }
+          localStorage.removeItem(AUTO_SAVE_STORAGE_KEY);
+          return null;
+      }
+
+      function resetAutoSaveTracking() {
+          autoSaveFocusedMessage = null;
+          autoSavePendingChanges = 0;
+          autoSaveDirty = false;
+          if (autoSaveTimer != null) {
+              clearTimeout(autoSaveTimer);
+              autoSaveTimer = null;
+          }
+      }
+
+      function clearAutoSaveDraft() {
+          resetAutoSaveTracking();
+          localStorage.removeItem(AUTO_SAVE_STORAGE_KEY);
+      }
+
+      function setAutoSaveFocusedMessage(userMessage) {
+          if (autoSaveFocusedMessage === userMessage) {
+              autoSaveKnownLengths.set(userMessage, userMessage.textContent.length);
+              return;
+          }
+          autoSaveFocusedMessage = userMessage;
+          autoSavePendingChanges = 0;
+          autoSaveDirty = false;
+          autoSaveKnownLengths.set(userMessage, userMessage.textContent.length);
+      }
+
+      function saveAutoSaveDraft() {
+          const userMessage = autoSaveFocusedMessage;
+          if (userMessage == null  ||  !userMessage.isConnected) {
+              localStorage.removeItem(AUTO_SAVE_STORAGE_KEY);
+              autoSavePendingChanges = 0;
+              autoSaveDirty = false;
+              return;
+          }
+          const message = userMessage.closest(".message");
+          const messageIndex = Array.prototype.indexOf.call(messages.children, message);
+          if (message == null  ||  messageIndex < 0) {
+              localStorage.removeItem(AUTO_SAVE_STORAGE_KEY);
+              autoSavePendingChanges = 0;
+              autoSaveDirty = false;
+              return;
+          }
+          const text = userMessage.textContent;
+          if (text == "") {
+              localStorage.removeItem(AUTO_SAVE_STORAGE_KEY);
+          }
+          else {
+              localStorage.setItem(AUTO_SAVE_STORAGE_KEY, JSON.stringify({
+                  messageIndex: messageIndex,
+                  text: text,
+              }));
+          }
+          autoSavePendingChanges = 0;
+          autoSaveDirty = false;
+      }
+
+      async function runAutoSave() {
+          if (autoSavePendingChanges < AUTO_SAVE_CHANGE_THRESHOLD) {
+              autoSaveDirty = false;
+              return;
+          }
+          autoSaveRunning = true;
+          try {
+              await Promise.resolve();
+              saveAutoSaveDraft();
+          }
+          finally {
+              autoSaveRunning = false;
+              if (autoSaveDirty  &&  autoSavePendingChanges >= AUTO_SAVE_CHANGE_THRESHOLD) {
+                  scheduleAutoSave();
+              }
+          }
+      }
+
+      function scheduleAutoSave() {
+          if (autoSavePendingChanges < AUTO_SAVE_CHANGE_THRESHOLD) {
+              return;
+          }
+          if (autoSaveRunning  ||  autoSaveTimer != null) {
+              autoSaveDirty = true;
+              return;
+          }
+          autoSaveDirty = false;
+          autoSaveTimer = setTimeout(() => {
+              autoSaveTimer = null;
+              runAutoSave().catch(() => {});
+          }, 0);
+      }
+
+      function flushAutoSaveDraft() {
+          if (autoSaveFocusedMessage == null) {
+              return;
+          }
+          saveAutoSaveDraft();
+      }
+
+      function restoreAutoSaveDraft() {
+          const draft = getAutoSaveDraft();
+          if (draft == null) {
+              return;
+          }
+          const message = messages.children[draft.messageIndex];
+          if (message == null) {
+              return;
+          }
+          const userMessage = message.querySelector(".user-message");
+          if (userMessage == null) {
+              return;
+          }
+          userMessage.textContent = draft.text;
+          autoSaveKnownLengths.set(userMessage, draft.text.length);
+      }
+
+      syncDivToLocalStorage("system-message");
+      syncInputToLocalStorage("model", "gpt-image-2");
+      syncInputToLocalStorage("key");
+      syncInputToLocalStorage("image-size");
+      syncInputToLocalStorage("image-quality");
+      syncInputToLocalStorage("image-format");
+      syncInputToLocalStorage("image-moderation");
+
+      document.getElementById("clear-all").addEventListener("click", async () => {
+          if (activeRequest != null) {
+              activeRequest.message.dataset.suppressNextFinish = "true";
+              activeRequest.controller.abort();
+              activeRequest = null;
+          }
+          await clearStoredImages().catch(() => {});
+          clearMessages();
+          newUserMessage();
+          localStorage.setItem(storageKey("history"), "");
+          clearAutoSaveDraft();
+      });
+
+      let messages = document.getElementById("messages");
+      let systemMessage = document.getElementById("system-message");
+      let model = document.getElementById("model");
+      let modelMenu = document.getElementById("model-menu");
+      let key = document.getElementById("key");
+      let imageSize = document.getElementById("image-size");
+      let imageSizeMenu = document.getElementById("image-size-menu");
+      let imageQuality = document.getElementById("image-quality");
+      let imageQualityMenu = document.getElementById("image-quality-menu");
+      let imageFormat = document.getElementById("image-format");
+      let imageFormatMenu = document.getElementById("image-format-menu");
+      let imageModeration = document.getElementById("image-moderation");
+      let imageModerationMenu = document.getElementById("image-moderation-menu");
+      let saveHistoryButton = document.getElementById("save-history");
+      let loadHistoryButton = document.getElementById("load-history");
+      let loadHistoryInput = document.getElementById("load-history-input");
+      let activeRequest = null;
+      let imageCounter = 0;
+      let imagesDbPromise = openImagesDb();
+      const AUTO_SAVE_CHANGE_THRESHOLD = 20;
+      const AUTO_SAVE_STORAGE_KEY = storageKey("draft-overlay");
+      let autoSaveFocusedMessage = null;
+      let autoSavePendingChanges = 0;
+      let autoSaveTimer = null;
+      let autoSaveRunning = false;
+      let autoSaveDirty = false;
+      let autoSaveKnownLengths = new WeakMap();
+      const sendButtonShape = `
+    <g class="send-shape" transform="translate(-38.425328,-84.136154)">
+      <path style="fill:#ffff00;stroke:#ffff00;stroke-width:10;stroke-linejoin:round;" d="M 52.567223,151.75928 43.425096,190.61331 144.44559,139.87452 43.425096,89.135727 l 9.142127,38.854033 91.878367,11.88476 z"/>
+    </g>
+`;
+      const stopButtonShape = `
+    <circle class="stop-shape" cx="55.509825" cy="55.738365" r="34" style="display:none;fill:#ffff00;stroke:#ffff00;stroke-width:10;stroke-linejoin:round;"/>
+`;
+
+      const newMessageAsHTML = `
+<div class="message">
+  <div class="user-message" contenteditable="plaintext-only"></div>
+  <svg viewBox="0 0 111.01965 111.47673" width="2em">
+${sendButtonShape}
+${stopButtonShape}
+  </svg>
+  <div class="attachment-controls">
+    <div class="input-images"></div>
+    <div><span class="input-image-toggle attachment-add">+</span></div>
+    <input class="attachment-input" type="file" accept="image/*" multiple style="display:none;">
+  </div>
+  <pre class="ai-message"></pre>
+  <div class="generated-images"></div>
+</div>
+`;
+
+      setupChoiceMenu(model, modelMenu, "model");
+      setupChoiceMenu(imageSize, imageSizeMenu, "image-size");
+      setupChoiceMenu(imageQuality, imageQualityMenu, "image-quality");
+      setupChoiceMenu(imageFormat, imageFormatMenu, "image-format");
+      setupChoiceMenu(imageModeration, imageModerationMenu, "image-moderation");
+      saveHistoryButton.addEventListener("click", () => {
+          saveConversationToDisk().catch(error => {
+              alert(error.toString());
+          });
+      });
+      loadHistoryButton.addEventListener("click", () => loadHistoryInput.click());
+      loadHistoryInput.addEventListener("change", () => {
+          const file = loadHistoryInput.files[0];
+          loadHistoryInput.value = "";
+          if (file == null) {
+              return;
+          }
+          loadConversationFromFile(file).catch(error => {
+              alert(error.toString());
+          });
+      });
+
+      (async () => {
+          const history = localStorage.getItem(storageKey("history"))  ||  "";
+          if (history == "") {
+              await restoreHistory([]);
+          }
+          else {
+              await restoreHistory(JSON.parse(history));
+          }
+          await pruneUnusedStoredImages();
+          restoreAutoSaveDraft();
+      })();
+
+      document.addEventListener("visibilitychange", () => {
+          if (document.visibilityState == "hidden") {
+              flushAutoSaveDraft();
+          }
+      });
+      window.addEventListener("pagehide", () => {
+          flushAutoSaveDraft();
+      });
+    </script>
+  </body>
+</html>
