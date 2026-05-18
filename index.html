@@ -662,6 +662,12 @@
           renderAiMessage(output);
       }
 
+      function appendAiMessageError(output, error) {
+          const text = output.dataset.rawText  ||  "";
+          const prefix = text == "" ? "------ Error -------\n" : "\n------ Error -------\n";
+          appendAiMessageText(output, `${prefix}[${error.toString()}]`);
+      }
+
       function shortenMiddle(text, length) {
           if (text.length <= length) {
               return text;
@@ -1210,7 +1216,7 @@
               }
               else {
                   clearGeneratedImagePartials(images);
-                  setAiMessageText(output, `[${error.toString()}]`);
+                  appendAiMessageError(output, error);
                   finishRequest(message, false);
               }
           });
