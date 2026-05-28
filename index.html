@@ -157,6 +157,37 @@
           line-height: 1.2;
       }
 
+      .ai-section-buttons {
+          display: flex;
+          justify-content: flex-end;
+          flex-wrap: wrap;
+          gap: 6px;
+          width: calc(100% - 50px);
+          margin-top: 2px;
+          color: #00ff00;
+          font-size: 1em;
+          line-height: 1.2;
+      }
+
+      .ai-section-buttons:empty {
+          display: none;
+      }
+
+      .ai-section-buttons button {
+          flex: 0 0 auto;
+          box-sizing: border-box;
+          min-width: calc(var(--copy-digits) * 1ch + 1em);
+          min-height: 2em;
+          padding: 0 0.45em;
+          border: 1px solid currentColor;
+          background: black;
+          color: inherit;
+          font: inherit;
+          line-height: inherit;
+          text-align: center;
+          touch-action: manipulation;
+      }
+
       .sources {
           margin-top: 4px;
           font-family: Arial, Helvetica, sans-serif;
@@ -650,6 +681,7 @@
               lastIndex = regex.lastIndex;
           }
           output.appendChild(document.createTextNode(text.slice(lastIndex)));
+          renderAiSectionButtons(output);
       }
 
       function setAiMessageText(output, text) {
@@ -666,6 +698,69 @@
           const text = output.dataset.rawText  ||  "";
           const prefix = text == "" ? "------ Error -------\n" : "\n------ Error -------\n";
           appendAiMessageText(output, `${prefix}[${error.toString()}]`);
+      }
+
+      function splitTextIntoCopySections(text) {
+          const targetLength = 10000;
+          const sections = [];
+          let start = 0;
+          while (start < text.length) {
+              let end = Math.min(start + targetLength, text.length);
+              if (end < text.length) {
+                  const nextNewline = text.indexOf("\n", end);
+                  end = nextNewline == -1 ? text.length : nextNewline + 1;
+              }
+              sections.push(text.slice(start, end));
+              start = end;
+          }
+          return sections;
+      }
+
+      async function copyTextToClipboard(text) {
+          if (navigator.clipboard != null  &&  window.isSecureContext) {
+              await navigator.clipboard.writeText(text);
+              return;
+          }
+
+          const textarea = document.createElement("textarea");
+          textarea.value = text;
+          textarea.style.position = "fixed";
+          textarea.style.left = "-9999px";
+          textarea.style.top = "0";
+          document.body.appendChild(textarea);
+          textarea.focus();
+          textarea.select();
+          try {
+              document.execCommand("copy");
+          }
+          finally {
+              textarea.remove();
+          }
+      }
+
+      function renderAiSectionButtons(output) {
+          const controls = output.parentElement.querySelector(".ai-section-buttons");
+          if (controls == null) {
+              return;
+          }
+          const sections = splitTextIntoCopySections(output.dataset.rawText  ||  "");
+          controls.textContent = "";
+          if (sections.length == 0) {
+              return;
+          }
+          for (let index = 0; index < sections.length; index += 1) {
+              const button = document.createElement("button");
+              button.type = "button";
+              button.textContent = String(index + 1);
+              button.style.setProperty("--copy-digits", String(button.textContent.length));
+              button.title = `Copy section ${index + 1}`;
+              button.addEventListener("click", () => {
+                  copyTextToClipboard(sections[index]).catch(error => {
+                      alert(error.toString());
+                  });
+              });
+              controls.appendChild(button);
+          }
       }
 
       function shortenMiddle(text, length) {
@@ -1275,6 +1370,7 @@ ${stopButtonShape}
     <input class="attachment-input" type="file" multiple style="display:none;">
   </div>
   <pre class="ai-message"></pre>
+  <div class="ai-section-buttons"></div>
   <div class="sources"></div>
   <div class="generated-images"></div>
 </div>
