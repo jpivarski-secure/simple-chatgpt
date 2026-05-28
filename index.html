@@ -159,10 +159,10 @@
 
       .ai-section-buttons {
           display: flex;
-          justify-content: flex-end;
+          justify-content: flex-start;
+          align-items: center;
           flex-wrap: wrap;
           gap: 6px;
-          width: calc(100% - 50px);
           margin-top: 2px;
           color: #00ff00;
           font-size: 0.75em;
@@ -748,6 +748,9 @@
           if (sections.length == 0) {
               return;
           }
+          const label = document.createElement("span");
+          label.textContent = "Copy: ";
+          controls.appendChild(label);
           for (let index = 0; index < sections.length; index += 1) {
               const button = document.createElement("button");
               button.type = "button";
