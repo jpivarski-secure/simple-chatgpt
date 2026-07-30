@@ -654,7 +654,7 @@
                       appendAiMessageText(output, "---- Reasoning -----\n");
                       reasoningHeaderShown = true;
                   }
-                  appendAiMessageText(output, summary);
+                  appendAiMessageText(output, "\n" + summary);
                   if (!summary.endsWith("\n")) {
                       appendAiMessageText(output, "\n");
                   }
@@ -670,7 +670,7 @@
               return;
           }
           if (reasoningHeaderShown  &&  !responseHeaderShown) {
-              appendAiMessageText(output, "\n---- Response ------\n");
+              appendAiMessageText(output, "\n---- Response ------\n\n");
           }
           responseHeaderShown = true;
           appendAiMessageText(output, delta);
@@ -685,7 +685,7 @@
           while ((match = regex.exec(text)) != null) {
               output.appendChild(document.createTextNode(text.slice(lastIndex, match.index)));
               output.appendChild(document.createTextNode("[" + match[1] + "]("));
-              const cleanUrl = stripChatgptTracking(match[2]);
+              const cleanUrl = stripUtmSource(match[2]);
               const a = document.createElement("a");
               a.href = cleanUrl;
               a.target = "_blank";
@@ -708,10 +708,10 @@
           renderAiMessage(output);
       }
 
-      function stripChatgptTracking(rawUrl) {
+      function stripUtmSource(rawUrl) {
           try {
               const url = new URL(rawUrl);
-              if (url.searchParams.get("utm_source") != "chatgpt") {
+              if (!url.searchParams.has("utm_source")) {
                   return rawUrl;
               }
               url.searchParams.delete("utm_source");
@@ -739,7 +739,7 @@
           container.appendChild(document.createTextNode("\n---- References ----"));
           container.appendChild(document.createElement("br"));
           for (const url of sources) {
-              const cleanUrl = stripChatgptTracking(url);
+              const cleanUrl = stripUtmSource(url);
               const a = document.createElement("a");
               a.href = cleanUrl;
               a.target = "_blank";
