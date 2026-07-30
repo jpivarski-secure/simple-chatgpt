@@ -758,12 +758,16 @@
       }
 
       function renderAiSectionButtons(output) {
-          const controls = output.parentElement.querySelector(".ai-section-buttons");
+          const message = output.parentElement;
+          const controls = message.querySelector(".ai-section-buttons");
           if (controls == null) {
               return;
           }
-          const sections = splitTextIntoCopySections(output.dataset.rawText  ||  "");
           controls.textContent = "";
+          if (activeRequest != null  &&  activeRequest.message == message) {
+              return;
+          }
+          const sections = splitTextIntoCopySections(output.dataset.rawText  ||  "");
           if (sections.length == 0) {
               return;
           }
@@ -813,7 +817,7 @@
           if (sources.length == 0) {
               return;
           }
-          container.appendChild(document.createTextNode("\n---- References ----"));
+          container.appendChild(document.createTextNode("\n---- References ----\n"));
           container.appendChild(document.createElement("br"));
           for (const url of sources) {
               const cleanUrl = stripUtmSource(url);
@@ -1060,6 +1064,10 @@
           responseHeaderShown = false;
           setButtonToStop(svg);
           activeRequest = {message: message, controller: controller};
+          const output = message.querySelector(".ai-message");
+          if (output != null) {
+              renderAiSectionButtons(output);
+          }
           return controller;
       }
 
