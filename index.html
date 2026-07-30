@@ -719,6 +719,19 @@
           appendAiMessageText(output, `${prefix}[${error.toString()}]`);
       }
 
+      function textAfterResponseDivider(text) {
+          const marker = "---- Response ------";
+          const index = text.indexOf(marker);
+          if (index == -1) {
+              return text;
+          }
+          let start = index + marker.length;
+          while (start < text.length  &&  (text[start] == "\n"  ||  text[start] == "\r")) {
+              start += 1;
+          }
+          return text.slice(start);
+      }
+
       function splitTextIntoCopySections(text) {
           const targetLength = 10000;
           const sections = [];
@@ -767,7 +780,7 @@
           if (activeRequest != null  &&  activeRequest.message == message) {
               return;
           }
-          const sections = splitTextIntoCopySections(output.dataset.rawText  ||  "");
+          const sections = splitTextIntoCopySections(textAfterResponseDivider(output.dataset.rawText  ||  ""));
           if (sections.length == 0) {
               return;
           }
