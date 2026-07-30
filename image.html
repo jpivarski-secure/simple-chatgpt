@@ -647,18 +647,33 @@
           if (item.id != null  &&  renderedReasoningItems.has(item.id)) {
               return;
           }
-          appendAiMessageText(output, "---- Reasoning -----\n");
           if (Array.isArray(item.summary)) {
               const summary = item.summary.map(x => x.text  ||  "").join("");
-              appendAiMessageText(output, summary);
-              if (summary != ""  &&  !summary.endsWith("\n")) {
-                  appendAiMessageText(output, "\n");
+              if (summary != "") {
+                  if (!reasoningHeaderShown) {
+                      appendAiMessageText(output, "---- Reasoning -----\n");
+                      reasoningHeaderShown = true;
+                  }
+                  appendAiMessageText(output, summary);
+                  if (!summary.endsWith("\n")) {
+                      appendAiMessageText(output, "\n");
+                  }
               }
           }
-          appendAiMessageText(output, "\n---- Response ------\n");
           if (item.id != null) {
               renderedReasoningItems.add(item.id);
           }
+      }
+
+      function appendResponseText(output, delta) {
+          if (delta == "") {
+              return;
+          }
+          if (reasoningHeaderShown  &&  !responseHeaderShown) {
+              appendAiMessageText(output, "\n---- Response ------\n");
+          }
+          responseHeaderShown = true;
+          appendAiMessageText(output, delta);
       }
 
       function renderAiMessage(output) {
@@ -670,11 +685,12 @@
           while ((match = regex.exec(text)) != null) {
               output.appendChild(document.createTextNode(text.slice(lastIndex, match.index)));
               output.appendChild(document.createTextNode("[" + match[1] + "]("));
+              const cleanUrl = stripChatgptTracking(match[2]);
               const a = document.createElement("a");
-              a.href = match[2];
+              a.href = cleanUrl;
               a.target = "_blank";
               a.rel = "noopener noreferrer";
-              a.textContent = match[2];
+              a.textContent = cleanUrl;
               output.appendChild(a);
               output.appendChild(document.createTextNode(")"));
               lastIndex = regex.lastIndex;
@@ -690,6 +706,20 @@
       function appendAiMessageText(output, text) {
           output.dataset.rawText = (output.dataset.rawText  ||  "") + text;
           renderAiMessage(output);
+      }
+
+      function stripChatgptTracking(rawUrl) {
+          try {
+              const url = new URL(rawUrl);
+              if (url.searchParams.get("utm_source") != "chatgpt") {
+                  return rawUrl;
+              }
+              url.searchParams.delete("utm_source");
+              return url.toString();
+          }
+          catch (error) {
+              return rawUrl;
+          }
       }
 
       function shortenMiddle(text, length) {
@@ -709,11 +739,12 @@
           container.appendChild(document.createTextNode("\n---- References ----"));
           container.appendChild(document.createElement("br"));
           for (const url of sources) {
+              const cleanUrl = stripChatgptTracking(url);
               const a = document.createElement("a");
-              a.href = url;
+              a.href = cleanUrl;
               a.target = "_blank";
               a.rel = "noopener noreferrer";
-              a.textContent = shortenMiddle(url, 50);
+              a.textContent = shortenMiddle(cleanUrl, 50);
               container.appendChild(a);
               container.appendChild(document.createElement("br"));
           }
@@ -950,6 +981,8 @@
           const controller = new AbortController();
           const svg = message.querySelector("svg");
           renderedReasoningItems = new Set();
+          reasoningHeaderShown = false;
+          responseHeaderShown = false;
           setButtonToStop(svg);
           activeRequest = {message: message, controller: controller};
           return controller;
@@ -1222,7 +1255,7 @@
           if (effort != ""  &&  !model.value.startsWith("gpt-4.1")) {
               body["reasoning"] = {
                   effort: effort,
-                  summary: "concise",
+                  summary: "detailed",
               };
           }
           if (webSearch.checked) {
@@ -1285,7 +1318,7 @@
                       try {
                           const json = JSON.parse(data);
                           if (json.type == "response.output_text.delta") {
-                              appendAiMessageText(output, json.delta  ||  "");
+                              appendResponseText(output, json.delta  ||  "");
                           }
                           else if (json.type == "response.output_item.done") {
                               appendReasoningSummary(output, json.item);
@@ -1344,6 +1377,8 @@
       let loadHistoryInput = document.getElementById("load-history-input");
       let activeRequest = null;
       let renderedReasoningItems = new Set();
+      let reasoningHeaderShown = false;
+      let responseHeaderShown = false;
       let attachedFiles = new Map();
       let attachmentCounter = 0;
       let generatedImageCounter = 0;
