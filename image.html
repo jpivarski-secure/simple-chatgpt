@@ -682,19 +682,22 @@
       }
 
       function appendReasoningSummary(output, item) {
-          if (item == null  ||  item.type != "reasoning"  ||  !("summary" in item)) {
+          if (item == null  ||  item.type != "reasoning") {
               return;
           }
           if (item.id != null  &&  renderedReasoningItems.has(item.id)) {
               return;
           }
+          // The header goes up for every reasoning item, even one whose detailed
+          // summary came back empty: its presence is how the user sees that
+          // reasoning happened at all.
+          if (!reasoningHeaderShown) {
+              appendAiMessageText(output, "---- Reasoning -----\n");
+              reasoningHeaderShown = true;
+          }
           if (Array.isArray(item.summary)) {
               const summary = item.summary.map(x => x.text  ||  "").join("");
               if (summary != "") {
-                  if (!reasoningHeaderShown) {
-                      appendAiMessageText(output, "---- Reasoning -----\n");
-                      reasoningHeaderShown = true;
-                  }
                   appendAiMessageText(output, "\n" + summary);
                   if (!summary.endsWith("\n")) {
                       appendAiMessageText(output, "\n");
