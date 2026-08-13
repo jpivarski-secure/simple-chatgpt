@@ -293,6 +293,7 @@
           }
           attachedFiles.clear();
           await clearGeneratedImages().catch(() => {});
+          await clearReasoningTraces().catch(() => {});
           while (messages.firstChild) {
               messages.removeChild(messages.firstChild);
           }
@@ -308,6 +309,7 @@
               sources: Array.from(message.querySelectorAll(".sources a")).map(x => x.href),
               attachments: Array.from(message.querySelectorAll(".attachment-line")).map(x => x.dataset.path),
               generatedImages: Array.from(message.querySelectorAll(".generated-images img[data-image-id]")).map(x => x.dataset.imageId),
+              reasoningId: message.querySelector(".ai-message").dataset.reasoningId  ||  null,
           })));
       }
 
@@ -457,22 +459,28 @@
           autoSaveKnownLengths.set(userMessage, draft.text.length);
       }
 
-      function openGeneratedImagesDb() {
+      function openAppDb() {
           return new Promise((resolve, reject) => {
-              const request = indexedDB.open("simple-chatgpt-images", 1);
+              const request = indexedDB.open("simple-chatgpt-images", 2);
               request.onupgradeneeded = () => {
-                  request.result.createObjectStore("images", {keyPath: "id"});
+                  const db = request.result;
+                  if (!db.objectStoreNames.contains("images")) {
+                      db.createObjectStore("images", {keyPath: "id"});
+                  }
+                  if (!db.objectStoreNames.contains("reasoning")) {
+                      db.createObjectStore("reasoning", {keyPath: "id"});
+                  }
               };
               request.onsuccess = () => resolve(request.result);
               request.onerror = () => reject(request.error);
           });
       }
 
-      async function withImageStore(mode, callback) {
-          const db = await generatedImagesDbPromise;
+      async function withStore(name, mode, callback) {
+          const db = await appDbPromise;
           return await new Promise((resolve, reject) => {
-              const transaction = db.transaction("images", mode);
-              const store = transaction.objectStore("images");
+              const transaction = db.transaction(name, mode);
+              const store = transaction.objectStore(name);
               const result = callback(store);
               transaction.oncomplete = () => resolve(result);
               transaction.onerror = () => reject(transaction.error);
@@ -480,37 +488,70 @@
           });
       }
 
-      async function saveGeneratedImage(dataUrl) {
-          generatedImageCounter += 1;
-          const id = "generated-image-" + Date.now() + "-" + generatedImageCounter;
-          await withImageStore("readwrite", store => {
-              store.put({id: id, dataUrl: dataUrl});
-          });
-          return id;
-      }
-
-      async function loadGeneratedImage(id) {
-          const db = await generatedImagesDbPromise;
+      async function getFromStore(name, id) {
+          const db = await appDbPromise;
           return await new Promise((resolve, reject) => {
-              const transaction = db.transaction("images", "readonly");
-              const store = transaction.objectStore("images");
+              const transaction = db.transaction(name, "readonly");
+              const store = transaction.objectStore(name);
               const request = store.get(id);
               request.onsuccess = () => resolve(request.result  ||  null);
               request.onerror = () => reject(request.error);
           });
       }
 
+      async function saveGeneratedImage(dataUrl) {
+          generatedImageCounter += 1;
+          const id = "generated-image-" + Date.now() + "-" + generatedImageCounter;
+          await withStore("images", "readwrite", store => {
+              store.put({id: id, dataUrl: dataUrl});
+          });
+          return id;
+      }
+
+      async function loadGeneratedImage(id) {
+          return await getFromStore("images", id);
+      }
+
       async function clearGeneratedImages() {
-          await withImageStore("readwrite", store => {
+          await withStore("images", "readwrite", store => {
               store.clear();
           });
       }
 
       async function saveGeneratedImagesDump(imageDump) {
-          await withImageStore("readwrite", store => {
+          await withStore("images", "readwrite", store => {
               store.clear();
               for (const [id, dataUrl] of Object.entries(imageDump)) {
                   store.put({id: id, dataUrl: dataUrl});
+              }
+          });
+      }
+
+      async function saveReasoningTrace(record) {
+          reasoningTraceCounter += 1;
+          const id = "reasoning-" + Date.now() + "-" + reasoningTraceCounter;
+          await withStore("reasoning", "readwrite", store => {
+              store.put({id: id, record: record});
+          });
+          return id;
+      }
+
+      async function loadReasoningTrace(id) {
+          const stored = await getFromStore("reasoning", id);
+          return stored == null ? null : stored.record;
+      }
+
+      async function clearReasoningTraces() {
+          await withStore("reasoning", "readwrite", store => {
+              store.clear();
+          });
+      }
+
+      async function saveReasoningDump(reasoningDump) {
+          await withStore("reasoning", "readwrite", store => {
+              store.clear();
+              for (const [id, record] of Object.entries(reasoningDump)) {
+                  store.put({id: id, record: record});
               }
           });
       }
@@ -670,6 +711,52 @@
           }
       }
 
+      function sanitizeReasoningItem(item, streamed) {
+          const encrypted =
+              typeof item.encrypted_content == "string" ? item.encrypted_content :
+              (streamed != null  &&  typeof streamed.encrypted_content == "string" ? streamed.encrypted_content : null);
+          return {
+              type: "reasoning",
+              id: typeof item.id == "string" ? item.id : "",
+              status: typeof item.status == "string" ? item.status : "completed",
+              summary: Array.isArray(item.summary) ? item.summary : [],
+              encrypted_content: encrypted,
+          };
+      }
+
+      function trailingReasoningRecord(output, streamed, modelName) {
+          const items = Array.isArray(output) ? output : [];
+          let end = items.length;
+          while (end > 0  &&  items[end - 1].type != "message") {
+              end -= 1;
+          }
+          if (end == 0) {
+              return null;
+          }
+          const reasoning = [];
+          let index = end - 2;
+          while (index >= 0  &&  items[index].type == "reasoning") {
+              reasoning.unshift(sanitizeReasoningItem(items[index], streamed.get(items[index].id)));
+              index -= 1;
+          }
+          const usable = reasoning.filter(x => x.id != ""  &&  x.encrypted_content != null);
+          if (usable.length != reasoning.length  ||  usable.length == 0) {
+              return null;
+          }
+          return {
+              model: modelName,
+              messageId: typeof items[end - 1].id == "string" ? items[end - 1].id : null,
+              items: usable,
+          };
+      }
+
+      function reasoningItemsToReplay(record, modelName) {
+          if (record == null  ||  record.model != modelName  ||  modelName.startsWith("gpt-4.1")) {
+              return [];
+          }
+          return Array.isArray(record.items) ? record.items : [];
+      }
+
       function appendResponseText(output, delta) {
           if (delta == "") {
               return;
@@ -730,6 +817,17 @@
               start += 1;
           }
           return text.slice(start);
+      }
+
+      function responseTextForApi(rawText) {
+          const text = rawText  ||  "";
+          if (!text.includes("---- Reasoning -----")) {
+              return text;
+          }
+          if (!text.includes("---- Response ------")) {
+              return "";
+          }
+          return textAfterResponseDivider(text);
       }
 
       function splitTextIntoCopySections(text) {
@@ -921,7 +1019,12 @@
                   Array.isArray(message.attachments)  &&
                   message.attachments.every(x => typeof x == "string")  &&
                   Array.isArray(message.generatedImages)  &&
-                  message.generatedImages.every(x => typeof x == "string")
+                  message.generatedImages.every(x => typeof x == "string")  &&
+                  (
+                      message.reasoningId === undefined  ||
+                      message.reasoningId === null  ||
+                      typeof message.reasoningId == "string"
+                  )
               )
           );
       }
@@ -934,6 +1037,38 @@
               Object.entries(imageDump).every(([id, dataUrl]) =>
                   typeof id == "string"  &&
                   typeof dataUrl == "string"
+              )
+          );
+      }
+
+      function reasoningRecordIsValid(record) {
+          return (
+              record != null  &&
+              typeof record == "object"  &&
+              !Array.isArray(record)  &&
+              typeof record.model == "string"  &&
+              (record.messageId === null  ||  typeof record.messageId == "string")  &&
+              Array.isArray(record.items)  &&
+              record.items.every(item =>
+                  item != null  &&
+                  typeof item == "object"  &&
+                  item.type == "reasoning"  &&
+                  typeof item.id == "string"  &&
+                  typeof item.status == "string"  &&
+                  typeof item.encrypted_content == "string"  &&
+                  Array.isArray(item.summary)
+              )
+          );
+      }
+
+      function reasoningDumpIsValid(reasoningDump) {
+          return (
+              reasoningDump != null  &&
+              typeof reasoningDump == "object"  &&
+              !Array.isArray(reasoningDump)  &&
+              Object.entries(reasoningDump).every(([id, record]) =>
+                  typeof id == "string"  &&
+                  reasoningRecordIsValid(record)
               )
           );
       }
@@ -963,6 +1098,29 @@
           return imageDump;
       }
 
+      function collectReferencedReasoningIds(history) {
+          const referencedReasoningIds = [];
+          const seen = new Set();
+          for (const message of history) {
+              if (typeof message.reasoningId == "string"  &&  message.reasoningId != ""  &&  !seen.has(message.reasoningId)) {
+                  referencedReasoningIds.push(message.reasoningId);
+                  seen.add(message.reasoningId);
+              }
+          }
+          return referencedReasoningIds;
+      }
+
+      async function buildReasoningDump(history) {
+          const reasoningDump = {};
+          for (const reasoningId of collectReferencedReasoningIds(history)) {
+              const record = await loadReasoningTrace(reasoningId);
+              if (reasoningRecordIsValid(record)) {
+                  reasoningDump[reasoningId] = record;
+              }
+          }
+          return reasoningDump;
+      }
+
       function clearMessages() {
           while (messages.firstChild) {
               messages.removeChild(messages.firstChild);
@@ -988,6 +1146,9 @@
                   else if (message.generatedImages.length == 0) {
                       setAiMessageText(last.querySelector(".ai-message"), "[No saved response.]");
                   }
+                  if (typeof message.reasoningId == "string"  &&  message.reasoningId != "") {
+                      last.querySelector(".ai-message").dataset.reasoningId = message.reasoningId;
+                  }
                   for (const path of message.attachments) {
                       attachmentCounter += 1;
                       addAttachmentLine(last, path, "attachment-" + attachmentCounter);
@@ -1003,6 +1164,7 @@
       async function saveConversationToDisk() {
           const history = getHistoryObject();
           const imageDump = await buildImageDump(history);
+          const reasoningDump = await buildReasoningDump(history);
           const name = prompt("Save conversation as:", "conversation.json");
           if (name == null) {
               return;
@@ -1016,6 +1178,7 @@
               version: 1,
               history: history,
               db: imageDump,
+              reasoning: reasoningDump,
           };
           const blob = new Blob([JSON.stringify(exportData, null, 2)], {type: "application/json"});
           const url = URL.createObjectURL(blob);
@@ -1042,7 +1205,8 @@
               typeof parsed != "object"  ||
               parsed.version !== 1  ||
               !historyReferencesAreValid(parsed.history)  ||
-              !imageDumpIsValid(parsed.db)
+              !imageDumpIsValid(parsed.db)  ||
+              (parsed.reasoning != null  &&  !reasoningDumpIsValid(parsed.reasoning))
           ) {
               alert("Format is wrong.");
               return;
@@ -1063,6 +1227,7 @@
           }
           await clearGeneratedImages();
           await saveGeneratedImagesDump(parsed.db);
+          await saveReasoningDump(parsed.reasoning  ||  {});
           localStorage.setItem("history", JSON.stringify(parsed.history));
           clearAutoSaveDraft();
           await restoreHistory(parsed.history);
@@ -1073,6 +1238,7 @@
           const svg = message.querySelector("svg");
           renderedReasoningItems = new Set();
           renderedImageCallIds = new Set();
+          streamedReasoningItems = new Map();
           reasoningHeaderShown = false;
           responseHeaderShown = false;
           setButtonToStop(svg);
@@ -1185,6 +1351,7 @@
           const sources = message.querySelector(".sources");
           const images = message.querySelector(".generated-images");
           setAiMessageText(output, "");
+          delete output.dataset.reasoningId;
           sources.textContent = "";
           images.textContent = "";
 
@@ -1193,7 +1360,9 @@
           let listOfMessages = [{role: "system", content: systemMessage.textContent}];
           for (let child of messages.children) {
               const userText = child.querySelector(".user-message").textContent;
-              const assistantText = child.querySelector(".ai-message").dataset.rawText  ||  "";
+              const assistantText = responseTextForApi(child.querySelector(".ai-message").dataset.rawText);
+              const reasoningId = child.querySelector(".ai-message").dataset.reasoningId;
+              const reasoningRecord = reasoningId ? await loadReasoningTrace(reasoningId) : null;
               const attachments = getAttachmentRecords(child);
               const generatedImages = await generatedImagesAsInputContent(child);
               if (userText.trim() != ""  ||  attachments.length != 0) {
@@ -1228,7 +1397,25 @@
                   }
               }
               if (assistantText.trim() != "") {
-                  listOfMessages.push({role: "assistant", content: assistantText});
+                  const replay = reasoningItemsToReplay(reasoningRecord, model.value);
+                  if (replay.length != 0) {
+                      for (const item of replay) {
+                          listOfMessages.push(item);
+                      }
+                      const assistantItem = {
+                          type: "message",
+                          role: "assistant",
+                          status: "completed",
+                          content: [{type: "output_text", text: assistantText}],
+                      };
+                      if (reasoningRecord.messageId != null) {
+                          assistantItem["id"] = reasoningRecord.messageId;
+                      }
+                      listOfMessages.push(assistantItem);
+                  }
+                  else {
+                      listOfMessages.push({role: "assistant", content: assistantText});
+                  }
               }
               if (generatedImages.length != 0) {
                   listOfMessages.push({
@@ -1246,11 +1433,14 @@
               stream: true,
           };
           const effort = reasoningEffort.value.trim();
-          if (effort != ""  &&  !model.value.startsWith("gpt-4.1")) {
+          if (!model.value.startsWith("gpt-4.1")) {
               body["reasoning"] = {
-                  effort: effort,
-                  summary: "detailed",
+                  context: "all_turns",
               };
+              if (effort != "") {
+                  body["reasoning"]["effort"] = effort;
+                  body["reasoning"]["summary"] = "detailed";
+              }
           }
           if (webSearch.checked) {
               body["tools"] = [{type: "web_search"}];
@@ -1326,6 +1516,9 @@
                           }
                           else if (json.type == "response.output_item.done") {
                               appendReasoningSummary(output, json.item);
+                              if (json.item?.type == "reasoning"  &&  typeof json.item.id == "string") {
+                                  streamedReasoningItems.set(json.item.id, json.item);
+                              }
                               if (json.item?.type == "image_generation_call"  &&  json.item.result  &&  !renderedImageCallIds.has(json.item.id)) {
                                   clearGeneratedImagePartials(images);
                                   const dataUrl = `data:image/png;base64,${json.item.result}`;
@@ -1352,6 +1545,10 @@
                                   }
                               }
                               renderSources(sources, collectWebSources(json.response  ||  {}));
+                              const record = trailingReasoningRecord(json.response?.output, streamedReasoningItems, model.value);
+                              if (record != null) {
+                                  output.dataset.reasoningId = await saveReasoningTrace(record);
+                              }
                           }
                           else if (json.type == "error") {
                               throw new Error(json.error?.message  ||  "Streaming error.");
@@ -1397,12 +1594,14 @@
       let activeRequest = null;
       let renderedReasoningItems = new Set();
       let renderedImageCallIds = new Set();
+      let streamedReasoningItems = new Map();
       let reasoningHeaderShown = false;
       let responseHeaderShown = false;
       let attachedFiles = new Map();
       let attachmentCounter = 0;
       let generatedImageCounter = 0;
-      let generatedImagesDbPromise = openGeneratedImagesDb();
+      let reasoningTraceCounter = 0;
+      let appDbPromise = openAppDb();
       const AUTO_SAVE_CHANGE_THRESHOLD = 20;
       const AUTO_SAVE_STORAGE_KEY = "draft-overlay";
       let autoSaveFocusedMessage = null;
@@ -1475,6 +1674,7 @@ ${stopButtonShape}
           }
           attachedFiles.clear();
           await clearGeneratedImages().catch(() => {});
+          await clearReasoningTraces().catch(() => {});
           localStorage.setItem("history", "");
           clearAutoSaveDraft();
           await restoreHistory([]);
