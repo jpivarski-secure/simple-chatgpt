@@ -718,7 +718,6 @@
           return {
               type: "reasoning",
               id: typeof item.id == "string" ? item.id : "",
-              status: typeof item.status == "string" ? item.status : "completed",
               summary: Array.isArray(item.summary) ? item.summary : [],
               encrypted_content: encrypted,
           };
@@ -754,7 +753,17 @@
           if (record == null  ||  record.model != modelName  ||  modelName.startsWith("gpt-4.1")) {
               return [];
           }
-          return Array.isArray(record.items) ? record.items : [];
+          if (!Array.isArray(record.items)) {
+              return [];
+          }
+          // Only these four fields are accepted on input: "status" is rejected outright
+          // and "summary" is required even when it is empty.
+          return record.items.map(item => ({
+              type: "reasoning",
+              id: item.id,
+              summary: Array.isArray(item.summary) ? item.summary : [],
+              encrypted_content: item.encrypted_content,
+          }));
       }
 
       function appendResponseText(output, delta) {
@@ -1054,7 +1063,6 @@
                   typeof item == "object"  &&
                   item.type == "reasoning"  &&
                   typeof item.id == "string"  &&
-                  typeof item.status == "string"  &&
                   typeof item.encrypted_content == "string"  &&
                   Array.isArray(item.summary)
               )
@@ -1405,7 +1413,6 @@
                       const assistantItem = {
                           type: "message",
                           role: "assistant",
-                          status: "completed",
                           content: [{type: "output_text", text: assistantText}],
                       };
                       if (reasoningRecord.messageId != null) {
@@ -1435,11 +1442,11 @@
           const effort = reasoningEffort.value.trim();
           if (!model.value.startsWith("gpt-4.1")) {
               body["reasoning"] = {
+                  summary: "detailed",
                   context: "all_turns",
               };
               if (effort != "") {
                   body["reasoning"]["effort"] = effort;
-                  body["reasoning"]["summary"] = "detailed";
               }
           }
           if (webSearch.checked) {
